@@ -203,6 +203,9 @@ main() {
             echo ""
             local neo_fasta="${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_peptides.fa"
             local neo_manifest="${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_manifest.tsv"
+            local neo_proteins="${DIR_NEOANTIGEN}/${SAMPLE_ID}_variant_proteins.tsv"
+            local neo_peptides="${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_peptides.tsv"
+            local neo_by_mer="${DIR_NEOANTIGEN}/fasta_by_mer"
             local hla_binding="${DIR_NEOANTIGEN}/${SAMPLE_ID}_hla_binding.tsv"
             if [ -f "${neo_fasta}" ]; then
                 local neo_count
@@ -210,6 +213,9 @@ main() {
                 echo "  候选肽数量: ${neo_count}"
                 echo "  候选肽FASTA: ${neo_fasta}"
                 [ -f "${neo_manifest}" ] && echo "  候选肽manifest: ${neo_manifest}"
+                [ -f "${neo_proteins}" ] && echo "  突变蛋白明细表: ${neo_proteins}"
+                [ -f "${neo_peptides}" ] && echo "  候选肽明细表: ${neo_peptides}"
+                [ -d "${neo_by_mer}" ] && echo "  按mer拆分FASTA目录: ${neo_by_mer}"
                 [ -f "${hla_binding}" ] && echo "  HLA结合预测: ${hla_binding}"
             else
                 echo "  新抗原分析: 未完成"

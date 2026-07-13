@@ -101,12 +101,14 @@ def annotate_gene(row: dict[str, str], truth_by_variant: dict[tuple[str, str, st
 
 
 def read_neoantigen_manifest(path: Path, pair_id: str) -> list[dict[str, str]]:
-    rows = read_tsv(path)
+    peptide_table = path.with_name(path.name.replace("_neoantigen_manifest.tsv", "_neoantigen_peptides.tsv"))
+    source = peptide_table if peptide_table.exists() else path
+    rows = read_tsv(source)
     if not rows:
         return []
     rows = []
-    for row in read_tsv(path):
-        if row.get("status") != "emitted":
+    for row in read_tsv(source):
+        if source == path and row.get("status") != "emitted":
             continue
         rows.append(
             {
@@ -114,12 +116,13 @@ def read_neoantigen_manifest(path: Path, pair_id: str) -> list[dict[str, str]]:
                 "gene": row.get("gene", ""),
                 "variant": row.get("variant_id", ""),
                 "effect": row.get("event_type") or row.get("consequence", ""),
-                "flank": row.get("window_flank", ""),
-                "window_length": row.get("window_length", ""),
+                "mer": row.get("mer", ""),
+                "peptide_start": row.get("mutant_peptide_start", ""),
+                "peptide_end": row.get("mutant_peptide_end", ""),
                 "changed_aa": row.get("amino_acids", ""),
-                "wt_peptide": row.get("wildtype_window", ""),
-                "mt_peptide": row.get("mutant_window", ""),
-                "logic": "来自VEP蛋白位置/氨基酸改变 + 配置的蛋白FASTA；按上下游flank生成突变窗口。",
+                "wt_peptide": row.get("wildtype_peptide") or row.get("wildtype_window", ""),
+                "mt_peptide": row.get("mutant_peptide") or row.get("mutant_window", ""),
+                "logic": "来自VEP蛋白位置/氨基酸改变 + 配置的蛋白FASTA；枚举所有覆盖突变位点的指定mer候选肽。",
             }
         )
     return rows
@@ -273,7 +276,7 @@ def main() -> int:
 
     truth_cols = [("pair_id", "配对ID"), ("tumor_sample", "肿瘤样本"), ("gene", "基因"), ("chrom", "染色体"), ("pos", "位置"), ("ref", "参考"), ("alt", "突变"), ("expected_af", "设计AF")]
     variant_cols = [("pair_id", "配对ID"), ("gene", "基因"), ("chrom", "染色体"), ("pos", "位置"), ("id", "ID"), ("ref", "参考"), ("alt", "突变"), ("filter", "过滤"), ("tumor_ad", "肿瘤AD"), ("tumor_af", "肿瘤AF"), ("tumor_dp", "肿瘤DP")]
-    neo_cols = [("pair_id", "配对ID"), ("gene", "基因"), ("variant", "突变"), ("effect", "突变类型"), ("flank", "上下游aa"), ("window_length", "窗口长度"), ("changed_aa", "氨基酸变化"), ("wt_peptide", "野生型窗口"), ("mt_peptide", "突变型窗口"), ("logic", "生成逻辑")]
+    neo_cols = [("pair_id", "配对ID"), ("gene", "基因"), ("variant", "突变"), ("effect", "突变类型"), ("mer", "mer"), ("peptide_start", "起点"), ("peptide_end", "终点"), ("changed_aa", "氨基酸变化"), ("wt_peptide", "野生型肽段"), ("mt_peptide", "突变型肽段"), ("logic", "生成逻辑")]
     action_cols = [("gene", "基因"), ("alteration", "改变类型"), ("therapy", "潜在药物/方向"), ("evidence", "证据级别提示"), ("note", "说明")]
     actionability_rows = make_actionability_rows(all_variant_rows)
 
@@ -312,7 +315,7 @@ def main() -> int:
     </div>
     <div class="card shadow-sm mb-4"><div class="card-body"><h2 class="h5">设计突变真值</h2>{html_table(truth, truth_cols)}</div></div>
     <div class="card shadow-sm mb-4"><div class="card-body"><h2 class="h5">检出的PASS突变</h2>{html_table(all_variant_rows, variant_cols)}</div></div>
-    <div class="card shadow-sm mb-4"><div class="card-body"><h2 class="h5">新抗原候选窗口</h2><p class="text-muted small">演示逻辑：例如上下游8aa表示突变位点前8个氨基酸 + 突变氨基酸 + 后8个氨基酸，总长通常为17aa。真实生产流程应基于VEP蛋白改变、转录本选择、表达量和HLA结合预测综合筛选。</p>{html_table(all_neo_rows, neo_cols)}</div></div>
+    <div class="card shadow-sm mb-4"><div class="card-body"><h2 class="h5">新抗原候选肽</h2><p class="text-muted small">演示逻辑：基于VEP蛋白改变和配置的蛋白FASTA重建突变蛋白，枚举所有覆盖突变位点的8-15mer候选肽。真实生产流程应结合转录本选择、表达量和HLA结合预测综合筛选。</p>{html_table(all_neo_rows, neo_cols)}</div></div>
     <div class="card shadow-sm"><div class="card-body"><h2 class="h5">药物/可干预性提示</h2><p class="text-muted small">仅用于演示，不构成临床用药建议。正式解读需要结合癌种、病理、胚系/体系来源、变异致病性、药品适应证、指南和OncoKB/CIViC/CGI等知识库。</p>{html_table(actionability_rows, action_cols)}</div></div>
   </main>
   <script>

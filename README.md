@@ -296,8 +296,11 @@ bash run_pipeline.sh check
 | 变异 | `variants/*.pass.vcf.gz` | 过滤后变异 |
 | SnpEff | `annotation/*.snpeff.vcf.gz` | SnpEff注释VCF |
 | VEP | `annotation/*.vep.vcf.gz` | VEP注释VCF |
-| 新抗原 | `neoantigen/*_neoantigen_peptides.fa` | 候选新抗原肽段FASTA |
-| 新抗原 | `neoantigen/*_neoantigen_manifest.tsv` | 候选肽来源、突变类型和跳过原因 |
+| 新抗原 | `neoantigen/*_neoantigen_peptides.fa` | 所有候选新抗原肽段合并FASTA |
+| 新抗原 | `neoantigen/fasta_by_mer/{8..15}mer.fa` | 按mer长度拆分的候选肽FASTA |
+| 新抗原 | `neoantigen/*_variant_proteins.tsv` | 突变、ANNOVAR/VEP/HGVS、原始/突变完整蛋白和突变前中后分段 |
+| 新抗原 | `neoantigen/*_neoantigen_peptides.tsv` | 每条候选肽的mer、蛋白坐标、野生型肽段和突变型肽段 |
+| 新抗原 | `neoantigen/*_neoantigen_manifest.tsv` | 兼容性manifest，包含候选肽来源、突变类型和跳过原因 |
 | HLA预测 | `neoantigen/*_hla_binding.tsv` | netMHCpan结合预测结果 |
 | CNV | `cnv/*.call.cns` | CNV调用结果 |
 | SV | `sv/*.diploidSV.vcf.gz` | 结构变异 |
@@ -341,9 +344,10 @@ RUN_TMB=true        # TMB计算
 ```bash
 # VEP完成后运行。留空时默认读取 results/annotation/${SAMPLE_ID}.vep.vcf.gz
 NEOANTIGEN_VEP_VCF=""
+NEOANTIGEN_ANNOVAR_TXT=""               # 可选: ANNOVAR multianno/exonic txt
 NEOANTIGEN_PROTEIN_FASTA="${PROJECT_DIR}/reference/protein.fa"
-NEOANTIGEN_PEPTIDE_LENGTHS="8,9,10,11"  # 历史变量名；表示突变位点上下游flank aa。8 => 17aa窗口
-NEOANTIGEN_PEPTIDE_FLANK=30             # 保留给扩展/兜底窗口
+NEOANTIGEN_PEPTIDE_LENGTHS="8-15"       # peptide mer长度；也可写 8,9,10,11
+NEOANTIGEN_PEPTIDE_FLANK=30             # 保留兼容旧参数；当前全mer生成不依赖该值
 
 # 可选: HLA结合预测
 HLA_ALLELES="HLA-A*02:01,HLA-B*07:02"

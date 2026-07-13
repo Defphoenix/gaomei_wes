@@ -196,9 +196,10 @@ VEP_EXTRA_PARAMS=""
 #---------------------------------------
 RUN_NEOANTIGEN=true
 NEOANTIGEN_VEP_VCF=""                     # 留空时默认使用 ${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz
+NEOANTIGEN_ANNOVAR_TXT=""                 # 可选: ANNOVAR multianno/exonic txt，用于合并到新抗原明细表
 NEOANTIGEN_PROTEIN_FASTA="${PROJECT_DIR}/reference/protein.fa"
-NEOANTIGEN_PEPTIDE_LENGTHS="8,9,10,11"    # 历史变量名；现在表示突变位点上下游flank aa列表。8 => 8+1+8=17aa窗口
-NEOANTIGEN_PEPTIDE_FLANK=30               # 保留给扩展/兜底窗口
+NEOANTIGEN_PEPTIDE_LENGTHS="8-15"         # peptide mer长度；支持 8-15 或 8,9,10,11,12,13,14,15
+NEOANTIGEN_PEPTIDE_FLANK=30               # 保留兼容旧参数；当前全mer生成不依赖该值
 HLA_ALLELES=""                            # 例如: HLA-A*02:01,HLA-B*07:02
 RUN_HLA_BINDING=false                     # 需要本地安装 netMHCpan 并配置 HLA_ALLELES
 HLA_BINDING_TOOL="auto"                   # auto/netmhcpan/mhcflurry/simple

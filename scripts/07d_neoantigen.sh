@@ -29,6 +29,9 @@ main() {
     local protein_fasta="${NEOANTIGEN_PROTEIN_FASTA:-${PROJECT_DIR}/reference/protein.fa}"
     local output_fasta="${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_peptides.fa"
     local manifest="${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_manifest.tsv"
+    local protein_table="${DIR_NEOANTIGEN}/${SAMPLE_ID}_variant_proteins.tsv"
+    local peptide_table="${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_peptides.tsv"
+    local fasta_dir="${DIR_NEOANTIGEN}/fasta_by_mer"
     local binding_out="${DIR_NEOANTIGEN}/${SAMPLE_ID}_hla_binding.tsv"
 
     mkdir -p "${DIR_NEOANTIGEN}" "${DIR_LOGS}"
@@ -43,8 +46,12 @@ main() {
         --protein-fasta "${protein_fasta}" \
         --output-fasta "${output_fasta}" \
         --manifest "${manifest}" \
+        --protein-table "${protein_table}" \
+        --peptide-table "${peptide_table}" \
+        --fasta-dir "${fasta_dir}" \
+        ${NEOANTIGEN_ANNOVAR_TXT:+--annovar-txt "${NEOANTIGEN_ANNOVAR_TXT}"} \
         --sample "${SAMPLE_ID}" \
-        --lengths "${NEOANTIGEN_PEPTIDE_LENGTHS:-8,9,10,11}" \
+        --lengths "${NEOANTIGEN_PEPTIDE_LENGTHS:-8,9,10,11,12,13,14,15}" \
         --flank "${NEOANTIGEN_PEPTIDE_FLANK:-30}"
 
     if [ ! -s "${output_fasta}" ]; then
@@ -54,6 +61,9 @@ main() {
 
     if [ "${RUN_HLA_BINDING:-false}" != true ]; then
         log_info "HLA结合预测未启用，候选肽FASTA已生成: ${output_fasta}"
+        log_info "候选肽按mer拆分目录: ${fasta_dir}"
+        log_info "突变蛋白明细表: ${protein_table}"
+        log_info "候选肽明细表: ${peptide_table}"
         log_info "如需预测，配置 HLA_ALLELES 并设置 RUN_HLA_BINDING=true"
         return 0
     fi
@@ -78,7 +88,10 @@ main() {
 
     log_info "新抗原分析完成!"
     log_info "候选肽FASTA: ${output_fasta}"
+    log_info "候选肽按mer拆分目录: ${fasta_dir}"
     log_info "候选肽manifest: ${manifest}"
+    log_info "突变蛋白明细表: ${protein_table}"
+    log_info "候选肽明细表: ${peptide_table}"
     log_info "HLA结合预测: ${binding_out}"
 }
 

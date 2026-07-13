@@ -9,6 +9,7 @@ and emits mutant peptide FASTA plus a manifest table.
 from __future__ import annotations
 
 import argparse
+import csv
 import gzip
 import re
 import sys
@@ -44,9 +45,34 @@ class CsqRecord:
     consequence: str
     protein_position: str
     amino_acids: str
+    hgvsc: str
     hgvsp: str
     canonical: str
     mutant_protein: str
+
+
+@dataclass
+class MutantProtein:
+    sequence: str
+    method: str
+    changed_start: int
+    changed_end: int
+    wt_prefix: str
+    wt_changed: str
+    wt_suffix: str
+    mut_prefix: str
+    mut_changed: str
+    mut_suffix: str
+
+
+@dataclass
+class PeptideRecord:
+    peptide_id: str
+    mer: int
+    start: int
+    end: int
+    peptide: str
+    wt_peptide: str
 
 
 def open_text(path: Path):
@@ -131,6 +157,59 @@ def get_field(values: Dict[str, str], *names: str) -> str:
     return ""
 
 
+def variant_key(chrom: str, pos: str, ref: str, alt: str) -> str:
+    return f"{chrom}:{pos}:{ref}>{alt}"
+
+
+def read_annovar_table(path: Optional[Path]) -> Dict[str, Dict[str, str]]:
+    """Read an optional ANNOVAR-style table keyed by chr/start/ref/alt.
+
+    The function is intentionally permissive because ANNOVAR table headers vary
+    between exonic_variant_function, multianno, and custom post-processed files.
+    """
+    if not path or not path.exists():
+        return {}
+    with path.open("rt", newline="") as handle:
+        sample = handle.readline()
+        if not sample:
+            return {}
+        delimiter = "\t" if "\t" in sample else ","
+        handle.seek(0)
+        reader = csv.DictReader(handle, delimiter=delimiter)
+        ann: Dict[str, Dict[str, str]] = {}
+        for row in reader:
+            chrom = get_field(row, "Chr", "CHROM", "chrom", "#CHROM")
+            pos = get_field(row, "Start", "POS", "pos")
+            ref = get_field(row, "Ref", "REF", "ref")
+            alt = get_field(row, "Alt", "ALT", "alt")
+            if chrom and pos and ref and alt:
+                ann[variant_key(chrom, pos, ref, alt)] = row
+        return ann
+
+
+def annovar_text(row: Dict[str, str]) -> str:
+    if not row:
+        return ""
+    preferred = [
+        "Func.refGene",
+        "Gene.refGene",
+        "ExonicFunc.refGene",
+        "AAChange.refGene",
+        "Func.ensGene",
+        "Gene.ensGene",
+        "ExonicFunc.ensGene",
+        "AAChange.ensGene",
+    ]
+    chunks = []
+    for key in preferred:
+        value = row.get(key, "")
+        if value:
+            chunks.append(f"{key}={value}")
+    if chunks:
+        return ";".join(chunks)
+    return ";".join(f"{key}={value}" for key, value in row.items() if value)
+
+
 def iter_csq_records(vcf: Path, csq_fields: Sequence[str]) -> Iterable[CsqRecord]:
     with open_text(vcf) as handle:
         for line in handle:
@@ -162,6 +241,7 @@ def iter_csq_records(vcf: Path, csq_fields: Sequence[str]) -> Iterable[CsqRecord
                     consequence=consequences,
                     protein_position=values.get("Protein_position", ""),
                     amino_acids=values.get("Amino_acids", ""),
+                    hgvsc=values.get("HGVSc", ""),
                     hgvsp=values.get("HGVSp", ""),
                     canonical=values.get("CANONICAL", ""),
                     mutant_protein=get_field(values, "MUTANT_PROTEIN", "MutantProtein") or record_mutant_protein,
@@ -192,9 +272,18 @@ def lookup_protein(rec: CsqRecord, proteins: Dict[str, str]) -> Optional[str]:
     return None
 
 
-def reconstruct_mutant(rec: CsqRecord, wt: Optional[str]) -> Tuple[Optional[str], str]:
+def split_protein(seq: str, start: int, end: int) -> Tuple[str, str, str]:
+    start = max(start, 1)
+    end = max(end, start)
+    return seq[: start - 1], seq[start - 1 : end], seq[end:]
+
+
+def reconstruct_mutant(rec: CsqRecord, wt: Optional[str]) -> Tuple[Optional[MutantProtein], str]:
     if rec.mutant_protein:
-        return rec.mutant_protein.replace("*", "").upper(), "custom_mutant_protein"
+        seq = rec.mutant_protein.replace("*", "").upper()
+        pos = first_int(rec.protein_position) or 1
+        prefix, changed, suffix = split_protein(seq, pos, pos)
+        return MutantProtein(seq, "custom_mutant_protein", pos, pos, "", "", "", prefix, changed, suffix), "custom_mutant_protein"
     if not wt:
         return None, "missing_wildtype_protein"
 
@@ -211,20 +300,35 @@ def reconstruct_mutant(rec: CsqRecord, wt: Optional[str]) -> Tuple[Optional[str]
     consequences = set(rec.consequence.split("&"))
     if "missense_variant" in consequences or "protein_altering_variant" in consequences:
         if len(alt_aa) == 1 and alt_aa in VALID_AA:
-            return wt[: pos - 1] + alt_aa + wt[pos:], "simple_aa_substitution"
+            seq = wt[: pos - 1] + alt_aa + wt[pos:]
+            wt_pre, wt_mid, wt_post = split_protein(wt, pos, pos)
+            mut_pre, mut_mid, mut_post = split_protein(seq, pos, pos)
+            return MutantProtein(seq, "simple_aa_substitution", pos, pos, wt_pre, wt_mid, wt_post, mut_pre, mut_mid, mut_post), "simple_aa_substitution"
         return None, "unsupported_missense_amino_acid_change"
 
     if "inframe_insertion" in consequences and alt_aa:
-        return wt[: pos - 1] + alt_aa + wt[pos - 1 :], "simple_inframe_insertion"
+        seq = wt[: pos - 1] + alt_aa + wt[pos - 1 :]
+        mut_end = pos + len(alt_aa) - 1
+        wt_pre, wt_mid, wt_post = split_protein(wt, pos, pos)
+        mut_pre, mut_mid, mut_post = split_protein(seq, pos, mut_end)
+        return MutantProtein(seq, "simple_inframe_insertion", pos, mut_end, wt_pre, wt_mid, wt_post, mut_pre, mut_mid, mut_post), "simple_inframe_insertion"
 
     if "inframe_deletion" in consequences:
         delete_len = len(ref_aa.replace("-", ""))
         if delete_len > 0:
-            return wt[: pos - 1] + wt[pos - 1 + delete_len :], "simple_inframe_deletion"
+            seq = wt[: pos - 1] + wt[pos - 1 + delete_len :]
+            mut_pos = min(pos, max(len(seq), 1))
+            wt_pre, wt_mid, wt_post = split_protein(wt, pos, pos + delete_len - 1)
+            mut_pre, mut_mid, mut_post = split_protein(seq, mut_pos, mut_pos)
+            return MutantProtein(seq, "simple_inframe_deletion", mut_pos, mut_pos, wt_pre, wt_mid, wt_post, mut_pre, mut_mid, mut_post), "simple_inframe_deletion"
         return None, "unsupported_inframe_deletion"
 
     if "stop_gained" in consequences:
-        return wt[: pos - 1], "stop_gained_truncation"
+        seq = wt[: pos - 1]
+        mut_pos = min(pos, max(len(seq), 1))
+        wt_pre, wt_mid, wt_post = split_protein(wt, pos, pos)
+        mut_pre, mut_mid, mut_post = split_protein(seq, mut_pos, mut_pos)
+        return MutantProtein(seq, "stop_gained_truncation", mut_pos, mut_pos, wt_pre, wt_mid, wt_post, mut_pre, mut_mid, mut_post), "stop_gained_truncation"
 
     if "stop_lost" in consequences:
         return None, "stop_lost_requires_mutant_protein_sequence"
@@ -236,15 +340,6 @@ def reconstruct_mutant(rec: CsqRecord, wt: Optional[str]) -> Tuple[Optional[str]
         return None, "frameshift_requires_mutant_protein_sequence"
 
     return None, "unsupported_consequence"
-
-
-def peptide_window(seq: str, center_pos: Optional[int], flank: int) -> str:
-    if center_pos is None or not seq:
-        return seq
-    center = min(max(center_pos - 1, 0), len(seq) - 1)
-    start = max(center - flank, 0)
-    end = min(center + flank + 1, len(seq))
-    return seq[start:end]
 
 
 def event_type(rec: CsqRecord) -> str:
@@ -266,27 +361,33 @@ def event_type(rec: CsqRecord) -> str:
     return "other"
 
 
-def peptides_for_record(
+def all_mutant_peptides(
     rec: CsqRecord,
     wt: Optional[str],
-    mutant: str,
-    flanks: Sequence[int],
-    flank: int,
-) -> List[Tuple[int, int, str, str]]:
-    pos = first_int(rec.protein_position)
-    peptides: List[Tuple[int, int, str, str]] = []
+    mutant: MutantProtein,
+    mers: Sequence[int],
+) -> List[PeptideRecord]:
+    peptides: List[PeptideRecord] = []
     seen = set()
-    for window_flank in flanks:
-        wt_window = peptide_window(wt, pos, window_flank) if wt else ""
-        mut_window = peptide_window(mutant, pos, window_flank)
-        key = (window_flank, mut_window)
-        if not mut_window or key in seen:
+    for mer in mers:
+        if mer <= 0 or len(mutant.sequence) < mer:
             continue
-        if mut_window == wt_window:
-            continue
-        if set(mut_window) <= VALID_AA:
-            peptides.append((window_flank, len(mut_window), mut_window, wt_window))
+        first_start = max(1, mutant.changed_end - mer + 1)
+        last_start = min(mutant.changed_start, len(mutant.sequence) - mer + 1)
+        for start in range(first_start, last_start + 1):
+            end = start + mer - 1
+            peptide = mutant.sequence[start - 1 : end]
+            if len(peptide) != mer or not set(peptide) <= VALID_AA:
+                continue
+            wt_peptide = wt[start - 1 : end] if wt and end <= len(wt) else ""
+            if wt and peptide in wt:
+                continue
+            key = (mer, start, peptide)
+            if key in seen:
+                continue
             seen.add(key)
+            peptide_id = ""
+            peptides.append(PeptideRecord(peptide_id, mer, start, end, peptide, wt_peptide))
     return peptides
 
 
@@ -295,19 +396,83 @@ def write_outputs(
     proteins: Dict[str, str],
     fasta_out: Path,
     manifest_out: Path,
+    protein_table_out: Path,
+    peptide_table_out: Path,
+    fasta_dir: Path,
     sample: str,
-    lengths: Sequence[int],
-    flank: int,
+    mers: Sequence[int],
+    annovar: Dict[str, Dict[str, str]],
 ) -> None:
     fasta_out.parent.mkdir(parents=True, exist_ok=True)
     manifest_out.parent.mkdir(parents=True, exist_ok=True)
+    protein_table_out.parent.mkdir(parents=True, exist_ok=True)
+    peptide_table_out.parent.mkdir(parents=True, exist_ok=True)
+    fasta_dir.mkdir(parents=True, exist_ok=True)
 
-    with fasta_out.open("wt") as fasta, manifest_out.open("wt") as manifest:
-        manifest.write(
+    fasta_handles = {mer: (fasta_dir / f"{mer}mer.fa").open("wt") for mer in mers}
+    try:
+        with (
+            fasta_out.open("wt") as fasta,
+            manifest_out.open("wt") as manifest,
+            protein_table_out.open("wt") as protein_table,
+            peptide_table_out.open("wt") as peptide_table,
+        ):
+            protein_table.write(
+                "\t".join(
+                    [
+                        "sample",
+                        "variant_id",
+                        "annovar_annotation",
+                        "vep_consequence",
+                        "gene",
+                        "feature",
+                        "protein_id",
+                        "hgvsc",
+                        "hgvsp",
+                        "protein_position",
+                        "amino_acids",
+                        "method",
+                        "status",
+                        "wildtype_protein",
+                        "mutant_protein",
+                        "wildtype_prefix",
+                        "wildtype_changed",
+                        "wildtype_suffix",
+                        "mutant_prefix",
+                        "mutant_changed",
+                        "mutant_suffix",
+                        "reason",
+                    ]
+                )
+                + "\n"
+            )
+            peptide_table.write(
+                "\t".join(
+                    [
+                        "sample",
+                        "peptide_id",
+                        "variant_id",
+                        "gene",
+                        "feature",
+                        "protein_id",
+                        "hgvsc",
+                        "hgvsp",
+                        "amino_acids",
+                        "mer",
+                        "mutant_peptide_start",
+                        "mutant_peptide_end",
+                        "wildtype_peptide",
+                        "mutant_peptide",
+                    ]
+                )
+                + "\n"
+            )
+            manifest.write(
             "\t".join(
                 [
                     "sample",
                     "variant_id",
+                    "annovar_annotation",
                     "gene",
                     "feature",
                     "protein_id",
@@ -315,87 +480,197 @@ def write_outputs(
                     "event_type",
                     "protein_position",
                     "amino_acids",
+                    "hgvsc",
+                    "hgvsp",
                     "method",
                     "status",
                     "peptide_id",
-                    "window_flank",
-                    "window_length",
-                    "wildtype_window",
-                    "mutant_window",
+                    "mer",
+                    "mutant_peptide_start",
+                    "mutant_peptide_end",
+                    "wildtype_peptide",
+                    "mutant_peptide",
+                    "wildtype_protein",
+                    "mutant_protein",
+                    "mutant_prefix",
+                    "mutant_changed",
+                    "mutant_suffix",
                     "reason",
                 ]
             )
             + "\n"
-        )
+            )
 
-        peptide_count = 0
-        for rec in records:
-            wt = lookup_protein(rec, proteins)
-            mutant, method = reconstruct_mutant(rec, wt)
-            if not mutant:
-                manifest.write(
+            peptide_count = 0
+            for rec in records:
+                wt = lookup_protein(rec, proteins)
+                mutant, method = reconstruct_mutant(rec, wt)
+                key = variant_key(rec.chrom, rec.pos, rec.ref, rec.alt)
+                ann_txt = annovar_text(annovar.get(key, {}))
+                if not mutant:
+                    protein_table.write(
+                        "\t".join(
+                            [
+                                sample,
+                                rec.var_id,
+                                ann_txt,
+                                rec.consequence,
+                                rec.symbol or rec.gene,
+                                rec.feature,
+                                rec.protein_id,
+                                rec.hgvsc,
+                                rec.hgvsp,
+                                rec.protein_position,
+                                rec.amino_acids,
+                                method,
+                                "skipped",
+                                wt or "",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "",
+                                method,
+                            ]
+                        )
+                        + "\n"
+                    )
+                    manifest.write(
+                        "\t".join(
+                            [
+                                sample,
+                                rec.var_id,
+                                ann_txt,
+                                rec.symbol or rec.gene,
+                                rec.feature,
+                                rec.protein_id,
+                                rec.consequence,
+                                event_type(rec),
+                                rec.protein_position,
+                                rec.amino_acids,
+                                rec.hgvsc,
+                                rec.hgvsp,
+                                method,
+                                "skipped",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "",
+                                wt or "",
+                                "",
+                                "",
+                                "",
+                                "",
+                                method,
+                            ]
+                        )
+                        + "\n"
+                    )
+                    continue
+
+                protein_table.write(
                     "\t".join(
                         [
                             sample,
                             rec.var_id,
+                            ann_txt,
+                            rec.consequence,
                             rec.symbol or rec.gene,
                             rec.feature,
                             rec.protein_id,
-                            rec.consequence,
-                            event_type(rec),
+                            rec.hgvsc,
+                            rec.hgvsp,
                             rec.protein_position,
                             rec.amino_acids,
-                            method,
-                            "skipped",
+                            mutant.method,
+                            "reconstructed",
+                            wt or "",
+                            mutant.sequence,
+                            mutant.wt_prefix,
+                            mutant.wt_changed,
+                            mutant.wt_suffix,
+                            mutant.mut_prefix,
+                            mutant.mut_changed,
+                            mutant.mut_suffix,
                             "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            method,
                         ]
                     )
                     + "\n"
                 )
-                continue
 
-            peptides = peptides_for_record(rec, wt, mutant, lengths, flank)
-            if not peptides:
-                manifest.write(
-                    "\t".join(
-                        [
-                            sample,
-                            rec.var_id,
-                            rec.symbol or rec.gene,
-                            rec.feature,
-                            rec.protein_id,
-                            rec.consequence,
-                            event_type(rec),
-                            rec.protein_position,
-                            rec.amino_acids,
-                            method,
-                            "no_novel_peptide",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "no_mutant_peptide_not_seen_in_wildtype_window",
-                        ]
+                peptides = all_mutant_peptides(rec, wt, mutant, mers)
+                if not peptides:
+                    manifest.write(
+                        "\t".join(
+                            [
+                                sample,
+                                rec.var_id,
+                                ann_txt,
+                                rec.symbol or rec.gene,
+                                rec.feature,
+                                rec.protein_id,
+                                rec.consequence,
+                                event_type(rec),
+                                rec.protein_position,
+                                rec.amino_acids,
+                                rec.hgvsc,
+                                rec.hgvsp,
+                                mutant.method,
+                                "no_novel_peptide",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "",
+                                "",
+                                wt or "",
+                                mutant.sequence,
+                                mutant.mut_prefix,
+                                mutant.mut_changed,
+                                mutant.mut_suffix,
+                                "no_mutant_peptide_not_seen_in_wildtype_protein",
+                            ]
+                        )
+                        + "\n"
                     )
-                    + "\n"
-                )
-                continue
+                    continue
 
-            for idx, (window_flank, window_length, pep, wt_window) in enumerate(peptides, start=1):
-                peptide_count += 1
-                peptide_id = f"{sample}|{rec.var_id}|{rec.symbol or rec.gene}|{rec.feature}|flank{window_flank}|p{idx}"
-                fasta.write(f">{peptide_id}\n{pep}\n")
+                for idx, pep in enumerate(peptides, start=1):
+                    peptide_count += 1
+                    peptide_id = f"{sample}|{rec.var_id}|{rec.symbol or rec.gene}|{rec.feature}|{pep.mer}mer|{pep.start}-{pep.end}|p{idx}"
+                    fasta.write(f">{peptide_id}\n{pep.peptide}\n")
+                    fasta_handles[pep.mer].write(f">{peptide_id}\n{pep.peptide}\n")
+                    peptide_table.write(
+                        "\t".join(
+                            [
+                                sample,
+                                peptide_id,
+                                rec.var_id,
+                                rec.symbol or rec.gene,
+                                rec.feature,
+                                rec.protein_id,
+                                rec.hgvsc,
+                                rec.hgvsp,
+                                rec.amino_acids,
+                                str(pep.mer),
+                                str(pep.start),
+                                str(pep.end),
+                                pep.wt_peptide,
+                                pep.peptide,
+                            ]
+                        )
+                        + "\n"
+                    )
                 manifest.write(
                     "\t".join(
                         [
                             sample,
                             rec.var_id,
+                            ann_txt,
                             rec.symbol or rec.gene,
                             rec.feature,
                             rec.protein_id,
@@ -403,18 +678,29 @@ def write_outputs(
                             event_type(rec),
                             rec.protein_position,
                             rec.amino_acids,
-                            method,
+                            rec.hgvsc,
+                            rec.hgvsp,
+                            mutant.method,
                             "emitted",
                             peptide_id,
-                            str(window_flank),
-                            str(window_length),
-                            wt_window,
-                            pep,
+                            str(pep.mer),
+                            str(pep.start),
+                            str(pep.end),
+                            pep.wt_peptide,
+                            pep.peptide,
+                            wt or "",
+                            mutant.sequence,
+                            mutant.mut_prefix,
+                            mutant.mut_changed,
+                            mutant.mut_suffix,
                             "",
                         ]
                     )
                     + "\n"
                 )
+    finally:
+        for handle in fasta_handles.values():
+            handle.close()
 
     print(f"neoantigen_records={len(records)}")
     print(f"neoantigen_peptides={sum(1 for line in fasta_out.open() if line.startswith('>'))}")
@@ -426,10 +712,14 @@ def parse_lengths(raw: str) -> List[int]:
         item = item.strip()
         if not item:
             continue
-        lengths.append(int(item))
+        if "-" in item:
+            start, end = item.split("-", 1)
+            lengths.extend(range(int(start), int(end) + 1))
+        else:
+            lengths.append(int(item))
     if not lengths:
         raise ValueError("No peptide lengths were provided")
-    return lengths
+    return sorted(set(lengths))
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -438,9 +728,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--protein-fasta", required=True, type=Path)
     parser.add_argument("--output-fasta", required=True, type=Path)
     parser.add_argument("--manifest", required=True, type=Path)
+    parser.add_argument("--protein-table", required=True, type=Path)
+    parser.add_argument("--peptide-table", required=True, type=Path)
+    parser.add_argument("--fasta-dir", required=True, type=Path)
+    parser.add_argument("--annovar-txt", type=Path, help="Optional ANNOVAR multianno/exonic table to merge into neoantigen reports.")
     parser.add_argument("--sample", required=True)
-    parser.add_argument("--lengths", default="8,9,10,11", help="Window flanks around the altered amino acid. 8 means 8 aa upstream + mutated aa + 8 aa downstream, usually 17 aa total.")
-    parser.add_argument("--flank", default=30, type=int)
+    parser.add_argument("--lengths", default="8,9,10,11,12,13,14,15", help="Comma-separated peptide mer lengths to enumerate, for example 8,9,10,11 or 8-15.")
+    parser.add_argument("--flank", default=30, type=int, help="Reserved for compatibility; all-mer generation does not use this value.")
     args = parser.parse_args(argv)
 
     if not args.vep_vcf.exists():
@@ -456,9 +750,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         proteins=proteins,
         fasta_out=args.output_fasta,
         manifest_out=args.manifest,
+        protein_table_out=args.protein_table,
+        peptide_table_out=args.peptide_table,
+        fasta_dir=args.fasta_dir,
         sample=args.sample,
-        lengths=parse_lengths(args.lengths),
-        flank=args.flank,
+        mers=parse_lengths(args.lengths),
+        annovar=read_annovar_table(args.annovar_txt),
     )
     return 0
 

@@ -1,0 +1,142 @@
+#!/bin/bash
+#===============================================================================
+# 07_variant_filter.sh - 变异过滤 (完全修复版)
+#===============================================================================
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="${CONFIG_FILE:-${SCRIPT_DIR}/../config.sh}"
+source "${CONFIG_FILE}"
+source "${SCRIPT_DIR}/utils.sh"
+
+#---------------------------------------
+# HaplotypeCaller 变异硬过滤
+#---------------------------------------
+filter_haplotypecaller() {
+    local input_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.raw.vcf.gz"
+    local snp_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.snps.vcf.gz"
+    local indel_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.indels.vcf.gz"
+    local filtered_snp="${DIR_VARIANTS}/${SAMPLE_ID}.snps.filtered.vcf.gz"
+    local filtered_indel="${DIR_VARIANTS}/${SAMPLE_ID}.indels.filtered.vcf.gz"
+    local final_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.filtered.vcf.gz"
+
+    check_file "原始VCF" "${input_vcf}" || return 1
+
+    # 1. 分离 SNP 和 InDel (修正了参数名为 -select-type)
+    log_info "执行: 分离SNP位点"
+    ${TOOL_GATK} --java-options "-Xmx${GATK_JAVA_MEM}" SelectVariants \
+        -R "${REFERENCE_GENOME}" \
+        -V "${input_vcf}" \
+        -select-type SNP \
+        -O "${snp_vcf}"
+
+    log_info "执行: 分离InDel位点"
+    ${TOOL_GATK} --java-options "-Xmx${GATK_JAVA_MEM}" SelectVariants \
+        -R "${REFERENCE_GENOME}" \
+        -V "${input_vcf}" \
+        -select-type INDEL \
+        -O "${indel_vcf}"
+
+    # 2. 执行硬过滤 (使用原生的 GATK 调用方式，避开 Shell 管道符号解析错误)
+    log_info "执行: SNP硬过滤"
+    ${TOOL_GATK} --java-options "-Xmx${GATK_JAVA_MEM}" VariantFiltration \
+        -R "${REFERENCE_GENOME}" \
+        -V "${snp_vcf}" \
+        -O "${filtered_snp}" \
+        --filter-expression 'QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0' \
+        --filter-name "SNP_FILTER"
+
+    log_info "执行: InDel硬过滤"
+    ${TOOL_GATK} --java-options "-Xmx${GATK_JAVA_MEM}" VariantFiltration \
+        -R "${REFERENCE_GENOME}" \
+        -V "${indel_vcf}" \
+        -O "${filtered_indel}" \
+        --filter-expression 'QD < 2.0 || FS > 200.0 || ReadPosRankSum < -20.0' \
+        --filter-name "INDEL_FILTER"
+
+    # 3. 合并结果
+    log_info "执行: 合并SNP和InDel结果"
+    ${TOOL_GATK} --java-options "-Xmx${GATK_JAVA_MEM}" MergeVcfs \
+        -I "${filtered_snp}" \
+        -I "${filtered_indel}" \
+        -O "${final_vcf}"
+
+    # 4. 提取 PASS 位点
+    local pass_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.pass.vcf.gz"
+    log_info "执行: 提取PASS位点"
+    ${TOOL_BCFTOOLS} view -f PASS -Oz -o "${pass_vcf}" "${final_vcf}"
+
+    # 5. 建立索引并清理
+    ${TOOL_BCFTOOLS} index -t "${pass_vcf}"
+    rm -f "${snp_vcf}" "${indel_vcf}" "${filtered_snp}" "${filtered_indel}" "${final_vcf}"
+    
+    log_info "变异过滤完成! 最终结果: ${pass_vcf}"
+}
+
+#---------------------------------------
+# Mutect2 体细胞变异过滤
+#---------------------------------------
+filter_mutect2() {
+    local input_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.raw.vcf.gz"
+    local filtered_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.filtered.vcf.gz"
+    local pass_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.pass.vcf.gz"
+
+    check_file "Mutect2原始VCF" "${input_vcf}" || return 1
+
+    local contamination_param=""
+    if [ -n "${MUTECT2_CONTAMINATION_TABLE:-}" ] && [ -f "${MUTECT2_CONTAMINATION_TABLE:-}" ]; then
+        contamination_param="--contamination-table ${MUTECT2_CONTAMINATION_TABLE}"
+        log_info "使用污染估计表: ${MUTECT2_CONTAMINATION_TABLE}"
+    fi
+
+    local interval_param=""
+    if [ -n "${INTERVAL_LIST:-}" ] && [ -f "${INTERVAL_LIST:-}" ]; then
+        interval_param="-L ${INTERVAL_LIST}"
+    elif [ -n "${INTERVAL_FILE:-}" ] && [ -f "${INTERVAL_FILE:-}" ]; then
+        interval_param="-L ${INTERVAL_FILE}"
+    fi
+
+    log_info "执行: Mutect2 FilterMutectCalls"
+    ${TOOL_GATK} --java-options "-Xmx${GATK_JAVA_MEM}" FilterMutectCalls \
+        -R "${REFERENCE_GENOME}" \
+        -V "${input_vcf}" \
+        -O "${filtered_vcf}" \
+        ${interval_param} \
+        ${contamination_param} \
+        ${FILTER_MUTECT_EXTRA_PARAMS:-}
+
+    check_file "Mutect2过滤VCF" "${filtered_vcf}" || return 1
+
+    log_info "执行: 提取Mutect2 PASS位点"
+    ${TOOL_BCFTOOLS} view -f PASS -Oz -o "${pass_vcf}" "${filtered_vcf}"
+    ${TOOL_BCFTOOLS} index -t "${pass_vcf}"
+
+    log_info "Mutect2过滤完成! 过滤VCF: ${filtered_vcf}"
+    log_info "Mutect2 PASS结果: ${pass_vcf}"
+}
+
+#---------------------------------------
+# 主函数
+#---------------------------------------
+main() {
+    log_step "步骤7: 变异过滤 (Variant Filtering)"
+    if [ "${SKIP_VARIANT_FILTER:-false}" = true ]; then return 0; fi
+    mkdir -p "${DIR_VARIANTS}"
+
+    case "${CALLER_MODE}" in
+        haplotypecaller|hc)
+            filter_haplotypecaller
+            ;;
+        mutect2|mt2)
+            filter_mutect2
+            ;;
+        *)
+            log_error "未知的CALLER_MODE: ${CALLER_MODE}"
+            log_error "支持: haplotypecaller / mutect2"
+            return 1
+            ;;
+    esac
+}
+
+main "$@"

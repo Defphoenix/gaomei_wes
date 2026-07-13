@@ -1,0 +1,4 @@
+name	chrom	pos_1based	ref	alt	type
+known_snp_1	chr22	20000300	T	A	snp
+known_snp_2	chr22	20000470	A	G	snp
+known_del_3bp	chr22	20000620	GTGT	G	del

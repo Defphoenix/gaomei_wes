@@ -1,0 +1,34 @@
+name: big_wes_pipeline_env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Runtime
+  - python=3.10
+  - pip
+  - openjdk=17
+
+  # FASTQ QC and trimming
+  - fastqc
+  - fastp
+  - seqtk
+  - trimmomatic
+
+  # Alignment and BAM/VCF utilities
+  - bwa
+  - samtools
+  - bcftools
+  - htslib
+  - bedtools
+
+  # Variant calling and annotation
+  - gatk4
+  - snpeff
+
+  # Coverage, MSI, reporting, compression
+  - mosdepth
+  - msisensor-pro
+  - multiqc
+  - pigz
+  - p7zip
+  - pyyaml

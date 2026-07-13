@@ -1,0 +1,81 @@
+# macOS / editor
+.DS_Store
+._*
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python / runtime cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.runtime/
+
+# Pipeline runtime outputs
+logs/
+results/
+cache/
+tmp/
+tmp_*/
+work/
+multiqc_data/
+
+# Project-generated local workspaces
+*_test_project/
+my_empty_test_project/
+tmp_tn_demo/
+
+# Local input/reference data
+data/
+reference/
+reference_data/
+rference_data/
+*.fa
+*.fasta
+*.fai
+*.dict
+*.2bit
+*.gtf
+*.gff
+*.gff3
+*.bed.gz
+*.vcf.gz
+*.vcf.gz.*
+*.tbi
+*.csi
+
+# Sequencing and alignment files
+*.fastq
+*.fq
+*.fastq.gz
+*.fq.gz
+*.sam
+*.bam
+*.bai
+*.cram
+*.crai
+
+# Bioinformatics generated archives/reports
+*.tar.gz
+*.zip
+*.html
+*.json
+
+# Conda / environment prefixes
+.conda/
+.conda_envs/
+envs/
+miniconda*/
+miniforge*/
+
+# Keep small demo fixtures explicitly when needed.
+!testdata/**/*.vcf
+!testdata/**/*.fa
+!testdata/**/*.bed
+!testdata/**/*.tsv
+!testdata/**/*.py
+!testdata/**/*.sh
+!testdata/**/out/*.fa
+!testdata/**/out/*.tsv

@@ -265,9 +265,15 @@ check_analysis_tools() {
     # Qualimap
     check_tool_optional "Qualimap" "${TOOL_QUALIMAP}" || true
 
-    # netMHCpan
+    # HLA binding predictors
     if [ "${RUN_HLA_BINDING:-false}" = true ]; then
-        check_tool_optional "netMHCpan" "${TOOL_NETMHCPAN:-netMHCpan}" || log_warn "netMHCpan不可用，HLA结合预测将跳过"
+        if command -v "${TOOL_NETMHCPAN:-netMHCpan}" &>/dev/null; then
+            check_tool_optional "netMHCpan" "${TOOL_NETMHCPAN:-netMHCpan}" || true
+        elif command -v "${TOOL_MHCFLURRY:-mhcflurry-predict}" &>/dev/null; then
+            check_tool_optional "MHCflurry" "${TOOL_MHCFLURRY:-mhcflurry-predict}" || true
+        else
+            log_warn "netMHCpan和mhcflurry-predict均不可用；HLA结合预测将退回simple测试模式或跳过正式预测"
+        fi
     fi
 
     return 0

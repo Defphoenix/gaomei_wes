@@ -18,7 +18,7 @@ Generated for local workspace: `/Users/mac/Documents/wes/test_run_workspace`
 | SnpEff database | `GRCh38.105` database | Not found under `/Users/mac/Documents/wes/reference_data` | Download only if SnpEff path is used |
 | CNVkit | `cnvkit.py` | Missing | Optional; pipeline has mosdepth fallback |
 | MSI | `msisensor-pro` | Installed | Provide list/baseline for formal MSI |
-| HLA binding | `netMHCpan`, `mhcflurry-predict` | Missing | netMHCpan manual license or install mhcflurry |
+| HLA binding | `netMHCpan`, `mhcflurry-predict` | Missing | NetMHCpan manual DTU install, or conda install MHCflurry |
 | Neoantigen protein FASTA | Ensembl/GENCODE protein FASTA | Missing | Download if neoantigen module is used |
 
 ## Software Table
@@ -41,8 +41,8 @@ Generated for local workspace: `/Users/mac/Documents/wes/test_run_workspace`
 | P1 | MSIsensor-pro | MSI | Installed | conda/bioconda | Formal run needs microsatellite list/baseline |
 | P2 | CNVkit | CNV | Missing | conda/bioconda | Optional; preferred for formal CNV |
 | P2 | Manta | SV | Missing | conda/bioconda or separate env | Optional SV module |
-| P2 | netMHCpan | HLA binding | Missing | Manual DTU licensed download | Best known option, license required |
-| P2 | mhcflurry | HLA binding | Missing | `wes_hla_env.yml` | Open install route, models may require extra downloads |
+| P2 | MHCflurry | HLA binding | Missing | `wes_hla_env.yml` / bioconda | Conda-installable option for binding prediction |
+| P2 | netMHCpan | HLA binding | Missing | Manual DTU standalone download | Widely used option, license/manual download required |
 | P2 | OptiType / arcasHLA | HLA typing | Missing | separate env | Needed if HLA alleles are not provided |
 
 ## Database Table
@@ -68,7 +68,7 @@ Generated for local workspace: `/Users/mac/Documents/wes/test_run_workspace`
 | P1 | COSMIC coding/noncoding | cancer annotation | Missing | licensed | COSMIC account/license | Cannot auto-download without credentials |
 | P1 | MSIsensor-pro microsatellite list | MSI | Missing | small-medium | `msisensor-pro scan` or prebuilt list | Formal MSI needs this |
 | P1 | MSIsensor-pro baseline | MSI tumor-only | Missing | medium | build/download baseline | Tumor-only formal calling improves with baseline |
-| P1 | Ensembl/GENCODE protein FASTA | neoantigen | Missing | small-medium | Ensembl/GENCODE | Needed to reconstruct peptide context |
+| P1 | Ensembl/GENCODE protein FASTA | neoantigen | Installed locally if `reference_data/protein/protein.fa` exists | small-medium | Ensembl/GENCODE | Needed to reconstruct peptide context; ID should match VEP ENSP/Feature |
 | P2 | Panel of Normals | Mutect2/CNV/MSI | Missing | project-specific | build from normals | Strongly recommended for somatic WES |
 | P2 | CNVkit pooled reference `.cnn` | CNVkit | Missing | project-specific | build from normals | Formal CNV improves with matched normals |
 | P2 | target capture BED | WES coverage/CNV | Using test BED only | small | vendor kit BED | Required for real WES |
@@ -105,7 +105,7 @@ Generated for local workspace: `/Users/mac/Documents/wes/test_run_workspace`
 2. Download/install ANNOVAR manually, then populate `annovar/humandb`.
 3. Add ClinVar/gnomAD/dbNSFP either through ANNOVAR humandb or VEP plugins; avoid duplicating huge databases unless needed.
 4. Prepare MSIsensor-pro list/baseline.
-5. Add HLA binding tool: netMHCpan if licensed, otherwise mhcflurry.
+5. Add HLA binding tool: MHCflurry via conda for open installation; NetMHCpan only if manually licensed/downloaded from DTU.
 6. Optional: CNVkit and Manta in separate optional environments.
 
 ## Licensing / Manual-download Items

@@ -7,5 +7,4 @@ dependencies:
   - pip
   - numpy
   - pandas
-  - pip:
-      - mhcflurry
+  - mhcflurry

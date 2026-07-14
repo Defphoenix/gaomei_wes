@@ -265,8 +265,13 @@ main() {
             echo "  [模块7] 微卫星不稳定性 (MSI)"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
+            local msi_call="${DIR_MSI}/${SAMPLE_ID}_msi_call.tsv"
+            local msi_call_summary="${DIR_MSI}/${SAMPLE_ID}_msi_call_summary.txt"
             local msi_summary="${DIR_MSI}/${SAMPLE_ID}_msi_summary.txt"
-            if [ -f "${msi_summary}" ]; then
+            if [ -f "${msi_call_summary}" ]; then
+                cat "${msi_call_summary}" | sed 's/^/  /'
+                [ -f "${msi_call}" ] && echo "  标准化判定表: ${msi_call}"
+            elif [ -f "${msi_summary}" ]; then
                 cat "${msi_summary}" | sed 's/^/  /'
             else
                 echo "  MSI检测: 未完成"

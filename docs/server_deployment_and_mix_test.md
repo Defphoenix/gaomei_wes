@@ -47,7 +47,7 @@ global channels from entering the solve.
 avoid pulling large R/ICU dependency chains on shared servers. If Picard is not
 available, duplicate marking falls back to `samtools markdup`.
 
-Optional HLA/mhcflurry environment:
+Optional HLA/MHCflurry environment:
 
 ```bash
 bash scripts/create_conda_envs.sh \
@@ -62,6 +62,20 @@ Then use these paths in generated configs:
 MAIN_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/big_wes_pipeline_env
 VEP_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_vep_env
 HLA_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_hla_env
+```
+
+The optional HLA environment installs MHCflurry through conda/bioconda. It does
+not install NetMHCpan. NetMHCpan is a DTU standalone tool and should be manually
+downloaded/installed only after accepting the appropriate license. In configs,
+`HLA_BINDING_TOOL=auto` will try NetMHCpan first, then MHCflurry, and finally
+the built-in `simple` smoke-test mode.
+
+MHCflurry separates the software package and prediction models. After creating
+the HLA environment, fetch the class-I presentation models once:
+
+```bash
+mamba run -p /PUBLIC/gomics/guofenghua/envs/wes/wes_hla_env \
+  mhcflurry-downloads fetch models_class1_presentation
 ```
 
 These environments are prefix-based, so activate by full path, not by short

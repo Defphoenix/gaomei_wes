@@ -37,11 +37,17 @@ write_smoke_summary() {
     local reason="$2"
     local summary="${DIR_MSI}/${SAMPLE_ID}_msi_summary.txt"
     local result="${DIR_MSI}/${SAMPLE_ID}_msi_result.txt"
+    local call="${DIR_MSI}/${SAMPLE_ID}_msi_call.tsv"
 
     {
         echo -e "sample\tmode\tstatus\treason\tbam"
         echo -e "${SAMPLE_ID}\tsmoke\tNOT_RUN\t${reason}\t${input_bam}"
     } > "${result}"
+
+    {
+        echo -e "sample\tmode\tmsi_status\tmsi_score_percent\tunstable_sites\ttotal_sites\tlow_threshold_percent\thigh_threshold_percent\treason\tresult_files"
+        echo -e "${SAMPLE_ID}\tsmoke\tNOT_DETERMINED\t\t\t\t${MSI_STATUS_LOW_THRESHOLD:-3}\t${MSI_STATUS_HIGH_THRESHOLD:-20}\t${reason}\t${result}"
+    } > "${call}"
 
     {
         echo "MSI检测摘要 - ${SAMPLE_ID}"
@@ -52,6 +58,7 @@ write_smoke_summary() {
         echo ""
         echo "说明: 这是流程连通性结果，不是正式MSI判定。"
         echo "正式运行需要提供 MSISENSOR2_LIST，或设置 MSISENSOR_SCAN_REFERENCE=true 先扫描参考基因组。"
+        echo "标准化判定表: ${call}"
     } > "${summary}"
 }
 
@@ -88,6 +95,23 @@ summarize_msi() {
     } > "${summary}"
 }
 
+write_msi_call() {
+    local output_prefix="$1"
+    local mode="$2"
+    local call="${DIR_MSI}/${SAMPLE_ID}_msi_call.tsv"
+    local call_summary="${DIR_MSI}/${SAMPLE_ID}_msi_call_summary.txt"
+
+    run_cmd "解析MSI结果并生成标准化判定表" \
+        "${TOOL_PYTHON:-python3}" "${SCRIPT_DIR}/msi_call_from_msisensor.py" \
+        --prefix "${output_prefix}" \
+        --sample "${SAMPLE_ID}" \
+        --mode "${mode}" \
+        --out "${call}" \
+        --summary "${call_summary}" \
+        --low-threshold "${MSI_STATUS_LOW_THRESHOLD:-3}" \
+        --high-threshold "${MSI_STATUS_HIGH_THRESHOLD:-20}"
+}
+
 main() {
     log_step "步骤9: MSIsensor-pro 微卫星不稳定性检测"
 
@@ -100,9 +124,17 @@ main() {
     input_bam=$(get_final_bam) || return 1
     check_file "输入BAM" "${input_bam}" || return 1
     check_file "输入BAM索引" "${input_bam}.bai" || return 1
-    check_tool "msisensor-pro" "${TOOL_MSISENSOR2:-msisensor-pro}" || return 1
 
     mkdir -p "${DIR_MSI}"
+
+    local mode="${MSISENSOR_MODE:-auto}"
+    if [ "${mode}" = "smoke" ]; then
+        write_smoke_summary "${input_bam}" "forced_smoke_mode"
+        log_info "MSI smoke summary已生成: ${DIR_MSI}/${SAMPLE_ID}_msi_summary.txt"
+        return 0
+    fi
+
+    check_tool "msisensor-pro" "${TOOL_MSISENSOR2:-msisensor-pro}" || return 1
 
     local msi_list
     msi_list=$(resolve_msi_list)
@@ -125,7 +157,6 @@ main() {
     fi
 
     local output_prefix="${DIR_MSI}/${SAMPLE_ID}_msi"
-    local mode="${MSISENSOR_MODE:-auto}"
 
     if [ "${mode}" = "auto" ]; then
         if [ "${SAMPLE_TYPE:-}" = "tumor" ] && [ -n "${NORMAL_BAM:-}" ] && [ -f "${NORMAL_BAM}" ]; then
@@ -160,10 +191,6 @@ main() {
                 -c "${MSI_MIN_COVERAGE:-15}" \
                 -b "${MSISENSOR_THREADS:-2}"
             ;;
-        smoke)
-            write_smoke_summary "${input_bam}" "forced_smoke_mode"
-            return 0
-            ;;
         *)
             log_error "未知 MSISENSOR_MODE: ${mode}"
             return 1
@@ -171,9 +198,11 @@ main() {
     esac
 
     summarize_msi "${output_prefix}" "${mode}"
+    write_msi_call "${output_prefix}" "${mode}"
 
     log_info "MSI检测完成!"
     log_info "MSI摘要: ${DIR_MSI}/${SAMPLE_ID}_msi_summary.txt"
+    log_info "MSI标准化判定表: ${DIR_MSI}/${SAMPLE_ID}_msi_call.tsv"
 }
 
 main "$@"

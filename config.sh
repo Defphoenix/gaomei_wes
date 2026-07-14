@@ -97,6 +97,8 @@ MSI_MIN_LENGTH=10
 MSI_MIN_HOMOPOLYMER=1
 MSI_MIN_COVERAGE=15
 MSI_SMOKE_TEST=true                       # 无normal/baseline时生成可读summary，不冒充正式MSI结果
+MSI_STATUS_LOW_THRESHOLD=3                # MSI score低阈值: <3% 默认判为MSS
+MSI_STATUS_HIGH_THRESHOLD=20              # MSI score高阈值: >=20% 默认判为MSI-H
 
 #---------------------------------------
 # Manta
@@ -201,8 +203,8 @@ NEOANTIGEN_PROTEIN_FASTA="${PROJECT_DIR}/reference/protein.fa"
 NEOANTIGEN_PEPTIDE_LENGTHS="8-15"         # peptide mer长度；支持 8-15 或 8,9,10,11,12,13,14,15
 NEOANTIGEN_PEPTIDE_FLANK=30               # 保留兼容旧参数；当前全mer生成不依赖该值
 HLA_ALLELES=""                            # 例如: HLA-A*02:01,HLA-B*07:02
-RUN_HLA_BINDING=false                     # 需要本地安装 netMHCpan 并配置 HLA_ALLELES
-HLA_BINDING_TOOL="auto"                   # auto/netmhcpan/mhcflurry/simple
+RUN_HLA_BINDING=false                     # 配置 HLA_ALLELES 后启用；auto优先netMHCpan，其次mhcflurry，最后simple测试模式
+HLA_BINDING_TOOL="auto"                   # auto/netmhcpan/mhcflurry/simple；生产推荐netMHCpan或mhcflurry
 HLA_BINDING_PREDICTION_THRESHOLD_NM=500
 
 RUN_CNV=false                             # 测试时可关闭CNV

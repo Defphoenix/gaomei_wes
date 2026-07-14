@@ -63,10 +63,11 @@ def run_mhcflurry(records: List[Tuple[str, str]], alleles: List[str], output: Pa
         peptide_csv = Path(tmpdir) / "peptides.csv"
         with peptide_csv.open("wt", newline="") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["peptide", "peptide_id"])
+            writer.writerow(["allele", "peptide", "peptide_id"])
             for peptide_id, peptide in records:
-                writer.writerow([peptide, peptide_id])
-        cmd = [tool, "--alleles", ",".join(alleles), "--out", str(output), str(peptide_csv)]
+                for allele in alleles:
+                    writer.writerow([allele, peptide, peptide_id])
+        cmd = [tool, "--out", str(output), "--output-delimiter", "\t", "--no-throw", str(peptide_csv)]
         subprocess.run(cmd, check=True)
 
 

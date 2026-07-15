@@ -257,7 +257,8 @@ if [ "${VERIFY_INSTALL}" = true ]; then
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "fastp" fastp --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "fastqc" fastqc --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "bedtools" bedtools --version
-    verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "picard" picard -h
+    verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "picard" bash -c \
+        'picard -h 2>&1 | grep -q "PicardCommandLine"'
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "mosdepth" mosdepth --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "msisensor-pro" bash -c 'msisensor-pro 2>&1 | grep -qi msisensor'
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "multiqc" multiqc --version

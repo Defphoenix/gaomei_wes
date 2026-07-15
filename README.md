@@ -140,10 +140,11 @@ bash scripts/create_conda_envs.sh \
   --with-cnv
 ```
 
-上面的推荐命令会创建五个 prefix 环境:
+上面的推荐命令会创建六个 prefix 环境:
 
 ```bash
-big_wes_pipeline_env   # 主流程: fastqc/fastp/bwa/samtools/gatk/bcftools/snpeff/mosdepth/msisensor-pro
+big_wes_pipeline_env   # 主流程: fastqc/fastp/bwa/samtools/gatk/bcftools/mosdepth/msisensor-pro (Java 17)
+wes_snpeff_env         # SnpEff/SnpSift 功能注释 (Java 21)
 wes_vep_env            # VEP专用环境
 wes_hla_env            # MHCflurry HLA结合预测环境，可选
 wes_hla_typing_env     # HLA*LA分型环境，Linux可选
@@ -179,6 +180,7 @@ reference_data/hla/PRG_MHC_GRCh38_withIMGT/
 source /PUBLIC/gomics/guofenghua/envs/wes/env.sh
 gatk --version
 vep --help
+bash scripts/run_snpeff_env.sh -version
 ```
 
 如果需要正式使用 MHCflurry 预测 HLA binding，首次还需要下载模型:
@@ -288,6 +290,7 @@ normal，然后用 tumor BAM + normal BAM 运行 `Mutect2`，再用
 CONDA_BASE="/path/to/conda"
 MAIN_ENV_PREFIX="${CONDA_BASE}/envs/big_wes_pipeline_env"
 VEP_ENV_PREFIX="/path/to/wes_vep_env"
+SNPEFF_ENV_PREFIX="/path/to/wes_snpeff_env"
 HLA_ENV_PREFIX="/path/to/wes_hla_env"
 
 PIPELINE_EXTRA_PATHS="${MAIN_ENV_PREFIX}/bin:${VEP_ENV_PREFIX}/bin:${HLA_ENV_PREFIX}/bin"
@@ -345,8 +348,8 @@ bash run_pipeline.sh check
 
 | 工具 | 用途 | 安装 |
 |------|------|------|
-| SnpEff | 功能注释 | `conda install -c bioconda snpeff` |
-| SnpSift | VCF过滤/注释 | 随SnpEff安装 |
+| SnpEff/SnpSift | 功能注释 | 独立 `wes_snpeff_env.yml`（Java 21） |
+| SnpSift | VCF过滤/注释 | 与SnpEff安装在同一个独立环境 |
 | VEP | 功能注释 | 独立 `wes_vep_env.yml`，需要同版本离线 cache |
 | HLA*LA | WES HLA分型 | 独立 `wes_hla_typing_env.yml`；图数据需单独准备 |
 | MHCflurry | HLA结合预测 | `conda install -c bioconda mhcflurry`; 首次使用需下载模型 |

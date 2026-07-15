@@ -1,0 +1,9 @@
+name: wes_snpeff_env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Current SnpEff releases are compiled for Java 21 (class file version 65).
+  - openjdk=21
+  - snpeff=5.4.0c
+  - snpsift=5.4.0c

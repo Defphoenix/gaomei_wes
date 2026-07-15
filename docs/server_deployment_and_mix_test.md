@@ -102,6 +102,7 @@ Then use these paths in generated configs:
 ```bash
 MAIN_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/big_wes_pipeline_env
 VEP_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_vep_env
+SNPEFF_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_snpeff_env
 HLA_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_hla_env
 HLA_TYPING_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_hla_typing_env
 CNV_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_cnv_env
@@ -158,6 +159,7 @@ source /PUBLIC/gomics/guofenghua/envs/wes/env.sh
 which java
 java -version
 gatk --version
+bash scripts/run_snpeff_env.sh -version
 ```
 
 GATK 4.6 requires Java 17. If you test GATK manually from a shell, put the main

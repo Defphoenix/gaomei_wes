@@ -20,6 +20,7 @@ CONDA_BASE="/Users/mac/anaconda3"
 ENV_ROOT=""
 MAIN_ENV_PREFIX_OVERRIDE=""
 VEP_ENV_PREFIX_OVERRIDE=""
+SNPEFF_ENV_PREFIX_OVERRIDE=""
 HLA_ENV_PREFIX_OVERRIDE=""
 HLA_TYPING_ENV_PREFIX_OVERRIDE=""
 CNV_ENV_PREFIX_OVERRIDE=""
@@ -44,9 +45,10 @@ Options:
   --reference-genome FA       Reference FASTA. Default: reference-dir/hg38/Homo_sapiens_assembly38.fasta
   --interval-bed BED          WES target BED.
   --conda-base DIR            Conda base path. Default: ${CONDA_BASE}
-  --env-root DIR              Env root containing big_wes_pipeline_env and wes_vep_env.
+  --env-root DIR              Root containing all WES conda environment prefixes.
   --main-env-prefix DIR       Full path to big_wes_pipeline_env. Overrides --env-root for main tools.
   --vep-env-prefix DIR        Full path to wes_vep_env. Overrides --env-root for VEP.
+  --snpeff-env-prefix DIR     Full path to wes_snpeff_env. Overrides --env-root for SnpEff.
   --hla-env-prefix DIR        Full path to wes_hla_env. Overrides --env-root for HLA.
   --hla-typing-env-prefix DIR Full path to wes_hla_typing_env. Overrides --env-root.
   --cnv-env-prefix DIR        Full path to wes_cnv_env. Overrides --env-root for CNVkit.
@@ -174,6 +176,7 @@ while [ $# -gt 0 ]; do
         --env-root) ENV_ROOT="$2"; shift 2 ;;
         --main-env-prefix) MAIN_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --vep-env-prefix) VEP_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
+        --snpeff-env-prefix) SNPEFF_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --hla-env-prefix) HLA_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --hla-typing-env-prefix) HLA_TYPING_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --cnv-env-prefix) CNV_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
@@ -255,6 +258,7 @@ fi
 if [ -n "${ENV_ROOT}" ]; then
     MAIN_ENV_PREFIX="${ENV_ROOT}/big_wes_pipeline_env"
     VEP_ENV_PREFIX="${ENV_ROOT}/wes_vep_env"
+    SNPEFF_ENV_PREFIX="${ENV_ROOT}/wes_snpeff_env"
     HLA_ENV_PREFIX="${ENV_ROOT}/wes_hla_env"
     HLA_TYPING_ENV_PREFIX="${ENV_ROOT}/wes_hla_typing_env"
     CNV_ENV_PREFIX="${ENV_ROOT}/wes_cnv_env"
@@ -262,6 +266,7 @@ if [ -n "${ENV_ROOT}" ]; then
 else
     MAIN_ENV_PREFIX="${CONDA_BASE}/envs/big_wes_pipeline_env"
     VEP_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_vep_env"
+    SNPEFF_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_snpeff_env"
     HLA_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_hla_env"
     HLA_TYPING_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_hla_typing_env"
     CNV_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_cnv_env"
@@ -269,6 +274,7 @@ else
 fi
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX_OVERRIDE:-${MAIN_ENV_PREFIX}}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX_OVERRIDE:-${VEP_ENV_PREFIX}}"
+SNPEFF_ENV_PREFIX="${SNPEFF_ENV_PREFIX_OVERRIDE:-${SNPEFF_ENV_PREFIX}}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX_OVERRIDE:-${HLA_ENV_PREFIX}}"
 HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX_OVERRIDE:-${HLA_TYPING_ENV_PREFIX}}"
 CNV_ENV_PREFIX="${CNV_ENV_PREFIX_OVERRIDE:-${CNV_ENV_PREFIX}}"
@@ -320,6 +326,7 @@ SAMPLE_TYPE="${sample_type}"
 CONDA_BASE="${CONDA_BASE}"
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX}"
+SNPEFF_ENV_PREFIX="${SNPEFF_ENV_PREFIX}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX}"
 HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX}"
 CNV_ENV_PREFIX="${CNV_ENV_PREFIX}"
@@ -327,6 +334,7 @@ SV_ENV_PREFIX="${SV_ENV_PREFIX}"
 PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${HLA_TYPING_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
 export PATH="\${PIPELINE_EXTRA_PATHS}:\${PATH}"
 export VEP_ENV="\${VEP_ENV_PREFIX}"
+export SNPEFF_ENV="\${SNPEFF_ENV_PREFIX}"
 PIPELINE_JAVA_HOME="\${MAIN_ENV_PREFIX}"
 export JAVA_HOME="\${PIPELINE_JAVA_HOME}"
 
@@ -426,6 +434,7 @@ NORMAL_SAMPLE_ID="${NORMAL_ID}"
 CONDA_BASE="${CONDA_BASE}"
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX}"
+SNPEFF_ENV_PREFIX="${SNPEFF_ENV_PREFIX}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX}"
 HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX}"
 CNV_ENV_PREFIX="${CNV_ENV_PREFIX}"
@@ -433,6 +442,7 @@ SV_ENV_PREFIX="${SV_ENV_PREFIX}"
 PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${HLA_TYPING_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
 export PATH="\${PIPELINE_EXTRA_PATHS}:\${PATH}"
 export VEP_ENV="\${VEP_ENV_PREFIX}"
+export SNPEFF_ENV="\${SNPEFF_ENV_PREFIX}"
 PIPELINE_JAVA_HOME="\${MAIN_ENV_PREFIX}"
 export JAVA_HOME="\${PIPELINE_JAVA_HOME}"
 

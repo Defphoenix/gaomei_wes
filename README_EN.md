@@ -52,8 +52,9 @@ Created environments:
 
 | Prefix | Purpose |
 |---|---|
-| `big_wes_pipeline_env` | Core QC, alignment, GATK, VCF, MSI, and reporting tools |
+| `big_wes_pipeline_env` | Core QC, alignment, GATK, VCF, MSI, and reporting tools (Java 17) |
 | `wes_vep_env` | Ensembl VEP 115 |
+| `wes_snpeff_env` | SnpEff and SnpSift annotation (Java 21) |
 | `wes_hla_env` | Optional MHCflurry binding prediction |
 | `wes_hla_typing_env` | Optional Linux HLA*LA typing |
 | `wes_cnv_env` | Optional CNVkit analysis |
@@ -71,6 +72,7 @@ Load the environment paths and test the installation:
 source /PUBLIC/gomics/guofenghua/envs/wes/env.sh
 gatk --version
 vep --help
+bash scripts/run_snpeff_env.sh -version
 ```
 
 MHCflurry models are downloaded separately:

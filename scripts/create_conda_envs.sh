@@ -201,8 +201,10 @@ mkdir -p "${ENV_ROOT}"
 
 run_create "big_wes_pipeline_env" "wes_env_version01.yml"
 run_create "wes_vep_env" "wes_vep_env.yml"
+run_create "wes_snpeff_env" "wes_snpeff_env.yml"
 write_manifest "big_wes_pipeline_env" "wes_env_version01.yml"
 write_manifest "wes_vep_env" "wes_vep_env.yml"
+write_manifest "wes_snpeff_env" "wes_snpeff_env.yml"
 
 if [ "${CREATE_HLA}" = true ]; then
     run_create "wes_hla_env" "wes_hla_env.yml"
@@ -236,12 +238,14 @@ cat > "${ENV_SH}" <<EOF
 
 export MAIN_ENV_PREFIX="${ENV_ROOT}/big_wes_pipeline_env"
 export VEP_ENV_PREFIX="${ENV_ROOT}/wes_vep_env"
+export SNPEFF_ENV_PREFIX="${ENV_ROOT}/wes_snpeff_env"
 export HLA_ENV_PREFIX="${ENV_ROOT}/wes_hla_env"
 export HLA_TYPING_ENV_PREFIX="${ENV_ROOT}/wes_hla_typing_env"
 export CNV_ENV_PREFIX="${ENV_ROOT}/wes_cnv_env"
 export SV_ENV_PREFIX="${ENV_ROOT}/wes_sv_env"
 export JAVA_HOME="\${MAIN_ENV_PREFIX}"
 export VEP_ENV="\${VEP_ENV_PREFIX}"
+export SNPEFF_ENV="\${SNPEFF_ENV_PREFIX}"
 export PATH="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${HLA_TYPING_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin:\${PATH}"
 EOF
 
@@ -262,8 +266,10 @@ if [ "${VERIFY_INSTALL}" = true ]; then
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "mosdepth" mosdepth --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "msisensor-pro" bash -c 'msisensor-pro 2>&1 | grep -qi msisensor'
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "multiqc" multiqc --version
-    verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "snpeff" snpEff -version
     verify_tool "${ENV_ROOT}/wes_vep_env" "vep" bash -c 'vep --help >/dev/null'
+    verify_tool "${ENV_ROOT}/wes_snpeff_env" "snpeff" snpEff -version
+    verify_tool "${ENV_ROOT}/wes_snpeff_env" "snpsift" bash -c \
+        'SnpSift -h 2>&1 | grep -qi "snpsift"'
     if [ "${CREATE_HLA}" = true ]; then
         verify_tool "${ENV_ROOT}/wes_hla_env" "mhcflurry" mhcflurry-predict --help
     fi
@@ -285,6 +291,7 @@ Environment creation finished.
 Use these paths in config.sh:
   MAIN_ENV_PREFIX="${ENV_ROOT}/big_wes_pipeline_env"
   VEP_ENV_PREFIX="${ENV_ROOT}/wes_vep_env"
+  SNPEFF_ENV_PREFIX="${ENV_ROOT}/wes_snpeff_env"
   HLA_ENV_PREFIX="${ENV_ROOT}/wes_hla_env"
   HLA_TYPING_ENV_PREFIX="${ENV_ROOT}/wes_hla_typing_env"
   CNV_ENV_PREFIX="${ENV_ROOT}/wes_cnv_env"
@@ -293,6 +300,7 @@ Use these paths in config.sh:
 Because these environments are prefix-based, activate them by full path:
   mamba activate "${ENV_ROOT}/big_wes_pipeline_env"
   mamba activate "${ENV_ROOT}/wes_vep_env"
+  mamba activate "${ENV_ROOT}/wes_snpeff_env"
 
 Or source the helper before running/testing pipeline tools:
   source "${ENV_SH}"

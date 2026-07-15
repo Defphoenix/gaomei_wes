@@ -7,7 +7,8 @@
 benchmark 和流程验证；正式临床或工业交付前仍需完成 PoN、CNV/MSI
 基线、临床知识库和队列级验证。当前已接入 Mutect2 污染/方向偏倚校正、
 HLA*LA 分型和严格 VEP TMB，但仍须使用本实验体系验证。详细审计见
-[流程审计与更新路线](docs/pipeline_audit_zh.md)。
+[流程审计与更新路线](docs/pipeline_audit_zh.md)。首次部署或升级请先看
+[安装与版本更新指南](docs/install_update_zh.md)。
 
 ## 流程总览
 
@@ -99,6 +100,7 @@ mutation_pipeline/
 之后所有项目都引用同一套环境。服务器部署、混样 benchmark、项目自动生成请看:
 
 ```text
+docs/install_update_zh.md
 docs/server_deployment_and_mix_test.md
 ```
 

@@ -24,6 +24,7 @@ ENV_ROOT=""
 MAIN_ENV_PREFIX_OVERRIDE=""
 VEP_ENV_PREFIX_OVERRIDE=""
 HLA_ENV_PREFIX_OVERRIDE=""
+HLA_TYPING_ENV_PREFIX_OVERRIDE=""
 CNV_ENV_PREFIX_OVERRIDE=""
 SV_ENV_PREFIX_OVERRIDE=""
 INCLUDE_TESTDATA=true
@@ -58,6 +59,7 @@ Options:
   --main-env-prefix DIR   Full path to big_wes_pipeline_env. Overrides --env-root for main tools.
   --vep-env-prefix DIR    Full path to wes_vep_env. Overrides --env-root for VEP.
   --hla-env-prefix DIR    Full path to wes_hla_env. Overrides --env-root for HLA.
+  --hla-typing-env-prefix DIR Full path to wes_hla_typing_env. Overrides --env-root.
   --cnv-env-prefix DIR    Full path to wes_cnv_env. Overrides --env-root for CNVkit.
   --sv-env-prefix DIR     Full path to wes_sv_env. Overrides --env-root for Manta.
   --no-testdata           Do not copy bundled testdata/demo FASTQ.
@@ -195,6 +197,7 @@ while [ $# -gt 0 ]; do
         --main-env-prefix) MAIN_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --vep-env-prefix) VEP_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --hla-env-prefix) HLA_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
+        --hla-typing-env-prefix) HLA_TYPING_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --cnv-env-prefix) CNV_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --sv-env-prefix) SV_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --no-testdata) INCLUDE_TESTDATA=false; shift ;;
@@ -220,6 +223,7 @@ if [ "${MODE}" = "tumor-normal" ] || [ "${MODE}" = "tumor_normal" ] || [ "${MODE
     [ -n "${MAIN_ENV_PREFIX_OVERRIDE}" ] && cmd+=(--main-env-prefix "${MAIN_ENV_PREFIX_OVERRIDE}")
     [ -n "${VEP_ENV_PREFIX_OVERRIDE}" ] && cmd+=(--vep-env-prefix "${VEP_ENV_PREFIX_OVERRIDE}")
     [ -n "${HLA_ENV_PREFIX_OVERRIDE}" ] && cmd+=(--hla-env-prefix "${HLA_ENV_PREFIX_OVERRIDE}")
+    [ -n "${HLA_TYPING_ENV_PREFIX_OVERRIDE}" ] && cmd+=(--hla-typing-env-prefix "${HLA_TYPING_ENV_PREFIX_OVERRIDE}")
     [ -n "${CNV_ENV_PREFIX_OVERRIDE}" ] && cmd+=(--cnv-env-prefix "${CNV_ENV_PREFIX_OVERRIDE}")
     [ -n "${SV_ENV_PREFIX_OVERRIDE}" ] && cmd+=(--sv-env-prefix "${SV_ENV_PREFIX_OVERRIDE}")
     [ "${INCLUDE_TESTDATA}" = false ] && cmd+=(--no-testdata)
@@ -295,18 +299,21 @@ if [ -n "${ENV_ROOT}" ]; then
     MAIN_ENV_PREFIX="${ENV_ROOT}/big_wes_pipeline_env"
     VEP_ENV_PREFIX="${ENV_ROOT}/wes_vep_env"
     HLA_ENV_PREFIX="${ENV_ROOT}/wes_hla_env"
+    HLA_TYPING_ENV_PREFIX="${ENV_ROOT}/wes_hla_typing_env"
     CNV_ENV_PREFIX="${ENV_ROOT}/wes_cnv_env"
     SV_ENV_PREFIX="${ENV_ROOT}/wes_sv_env"
 else
     MAIN_ENV_PREFIX="${CONDA_BASE}/envs/big_wes_pipeline_env"
     VEP_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_vep_env"
     HLA_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_hla_env"
+    HLA_TYPING_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_hla_typing_env"
     CNV_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_cnv_env"
     SV_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_sv_env"
 fi
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX_OVERRIDE:-${MAIN_ENV_PREFIX}}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX_OVERRIDE:-${VEP_ENV_PREFIX}}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX_OVERRIDE:-${HLA_ENV_PREFIX}}"
+HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX_OVERRIDE:-${HLA_TYPING_ENV_PREFIX}}"
 CNV_ENV_PREFIX="${CNV_ENV_PREFIX_OVERRIDE:-${CNV_ENV_PREFIX}}"
 SV_ENV_PREFIX="${SV_ENV_PREFIX_OVERRIDE:-${SV_ENV_PREFIX}}"
 
@@ -327,9 +334,10 @@ CONDA_BASE="${CONDA_BASE}"
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX}"
+HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX}"
 CNV_ENV_PREFIX="${CNV_ENV_PREFIX}"
 SV_ENV_PREFIX="${SV_ENV_PREFIX}"
-PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
+PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${HLA_TYPING_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
 export PATH="\${PIPELINE_EXTRA_PATHS}:\${PATH}"
 export VEP_ENV="\${VEP_ENV_PREFIX}"
 PIPELINE_JAVA_HOME="\${MAIN_ENV_PREFIX}"
@@ -351,9 +359,12 @@ THOUSAND_G_VCF="${REFERENCE_DIR}/1000G_phase1.snps.high_confidence.hg38.vcf.gz"
 VEP_CACHE_DIR="${REFERENCE_DIR}/vep_cache"
 VEP_FASTA="\${REFERENCE_GENOME}"
 NEOANTIGEN_PROTEIN_FASTA="${REFERENCE_DIR}/protein/protein.fa"
+RUN_HLA_TYPING="auto"
+HLA_LA_GRAPH_DIR="${REFERENCE_DIR}/hla/PRG_MHC_GRCh38_withIMGT"
 
 INTERVAL_FILE="${INTERVAL_BED}"
 CNVKIT_TARGET_BED="${INTERVAL_BED}"
+TMB_EFFECTIVE_CODING_BED="${INTERVAL_BED}"
 
 RESULT_DIR="${RESULT_DIR}"
 DIR_FASTQC="\${RESULT_DIR}/fastqc"
@@ -369,6 +380,7 @@ DIR_MSI="\${RESULT_DIR}/msi"
 DIR_COVERAGE="\${RESULT_DIR}/coverage"
 DIR_TMB="\${RESULT_DIR}/tmb"
 DIR_NEOANTIGEN="\${RESULT_DIR}/neoantigen"
+DIR_HLA_TYPING="\${RESULT_DIR}/hla_typing"
 DIR_SUMMARY="\${RESULT_DIR}/summary"
 DIR_MULTIQC="\${RESULT_DIR}/multiqc"
 DIR_LOGS="${OUT_DIR}/logs"
@@ -382,7 +394,7 @@ RUN_CNV=false
 RUN_SV=false
 RUN_MSI=false
 RUN_COVERAGE=true
-RUN_TMB=true
+RUN_TMB=false
 
 SKIP_BQSR=true
 SKIP_SNPEFF=true

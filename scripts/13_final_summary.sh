@@ -191,7 +191,32 @@ main() {
         local vep_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
         [ -f "${snpeff_vcf}" ] && echo "  SnpEff注释: ${snpeff_vcf}"
         [ -f "${vep_vcf}" ] && echo "  VEP注释: ${vep_vcf}"
+        if [ "${CALLER_MODE}" = "mutect2" ] || [ "${CALLER_MODE}" = "mt2" ]; then
+            local orientation_model="${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.read-orientation-model.tar.gz"
+            local contamination_table="${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.contamination.table"
+            local segmentation_table="${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.segments.table"
+            [ -f "${orientation_model}" ] && echo "  方向偏倚模型: ${orientation_model}"
+            if [ -f "${contamination_table}" ]; then
+                local contamination_value
+                contamination_value=$(awk 'BEGIN{FS="\t"} !/^#/ && $1!="sample" && NF>=2 {print $2; exit}' "${contamination_table}")
+                echo "  污染估计: ${contamination_value:-已生成} (${contamination_table})"
+            fi
+            [ -f "${segmentation_table}" ] && echo "  污染分段: ${segmentation_table}"
+        fi
         echo ""
+
+        # HLA分型可来自当前样本，或肿瘤-正常项目中配置的normal样本结果。
+        local hla_alleles_file="${HLA_TYPING_ALLELES_FILE:-${DIR_HLA_TYPING}/${SAMPLE_ID}_hla_binding_alleles.txt}"
+        if [ -f "${hla_alleles_file}" ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "  [模块4a] HLA高分辨率分型"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo ""
+            echo "  HLA-I binding兼容等位基因: $(cat "${hla_alleles_file}")"
+            echo "  等位基因文件: ${hla_alleles_file}"
+            echo "  注: 完整G-group/多字段结果保存在normal样本hla_typing目录，不以两字段binding输入替代。"
+            echo ""
+        fi
 
         #=======================================
         # 模块4b: 新抗原
@@ -307,7 +332,7 @@ main() {
             local tmb_result="${DIR_TMB}/${SAMPLE_ID}_tmb_result.txt"
             if [ -f "${tmb_result}" ]; then
                 # 只提取关键信息
-                grep -E "TMB值|TMB-HIGH|TMB-LOW|TMB-INTERMEDIATE|TMB相关变异数|编码区大小" "${tmb_result}" | \
+                grep -E "纳入突变数|排除突变数|有效编码区|分母验证状态|TMB:|分层:" "${tmb_result}" | \
                     sed 's/^/  /'
             else
                 echo "  TMB计算: 未完成"
@@ -325,7 +350,7 @@ main() {
         echo "  结果根目录: ${RESULT_DIR}"
         echo ""
 
-        for dir_name in fastqc trimmed aligned bqsr variants annotation neoantigen cnv sv msi coverage tmb summary multiqc; do
+        for dir_name in fastqc trimmed aligned bqsr hla_typing variants annotation neoantigen cnv sv msi coverage tmb summary multiqc; do
             local dir_path="${RESULT_DIR}/${dir_name}"
             if [ -d "${dir_path}" ]; then
                 echo "  [${dir_name}]"

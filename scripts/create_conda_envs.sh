@@ -9,6 +9,7 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_ROOT="${ENV_ROOT:-${PROJECT_DIR}/.conda_envs}"
 MAMBA_BIN="${MAMBA_BIN:-}"
 CREATE_HLA="${CREATE_HLA:-false}"
+CREATE_HLA_TYPING="${CREATE_HLA_TYPING:-false}"
 CREATE_CNV="${CREATE_CNV:-false}"
 CREATE_SV="${CREATE_SV:-false}"
 FETCH_MHCFLURRY_MODELS="${FETCH_MHCFLURRY_MODELS:-false}"
@@ -29,9 +30,10 @@ Options:
   --clean-incomplete   Remove incomplete env dirs before recreating.
   --update-existing    Update existing prefixes from current YML files and prune removed packages.
   --with-hla           Also create mhcflurry HLA environment.
+  --with-hla-typing    Also create the Linux HLA*LA typing environment.
   --with-cnv           Also create the isolated CNVkit environment.
   --with-sv            Also create the isolated Manta environment (Linux only).
-  --all-optional       Create HLA, CNVkit and Manta environments.
+  --all-optional       Create binding, HLA typing, CNVkit and Manta environments.
   --fetch-hla-models   After --with-hla, fetch MHCflurry class-I presentation models.
   --no-verify          Skip post-install tool checks.
   --no-manifests       Do not write resolved package/version manifests.
@@ -51,9 +53,10 @@ while [ $# -gt 0 ]; do
         --clean-incomplete) CLEAN_INCOMPLETE=true; shift ;;
         --update-existing) UPDATE_EXISTING=true; shift ;;
         --with-hla) CREATE_HLA=true; shift ;;
+        --with-hla-typing) CREATE_HLA_TYPING=true; shift ;;
         --with-cnv) CREATE_CNV=true; shift ;;
         --with-sv) CREATE_SV=true; shift ;;
-        --all-optional) CREATE_HLA=true; CREATE_CNV=true; CREATE_SV=true; shift ;;
+        --all-optional) CREATE_HLA=true; CREATE_HLA_TYPING=true; CREATE_CNV=true; CREATE_SV=true; shift ;;
         --fetch-hla-models) FETCH_MHCFLURRY_MODELS=true; CREATE_HLA=true; shift ;;
         --no-verify) VERIFY_INSTALL=false; shift ;;
         --no-manifests) WRITE_MANIFESTS=false; shift ;;
@@ -184,6 +187,11 @@ write_manifest() {
 
 detect_mamba_bin
 
+if [ "${CREATE_HLA_TYPING}" = true ] && [ "$(uname -s)" != "Linux" ]; then
+    echo "[ERROR] HLA*LA Bioconda package is Linux-only; create wes_hla_typing_env on the analysis server." >&2
+    exit 1
+fi
+
 echo "[INFO] project: ${PROJECT_DIR}"
 echo "[INFO] env root: ${ENV_ROOT}"
 echo "[INFO] solver: ${MAMBA_BIN}"
@@ -205,6 +213,11 @@ if [ "${CREATE_HLA}" = true ]; then
     fi
 fi
 
+if [ "${CREATE_HLA_TYPING}" = true ]; then
+    run_create "wes_hla_typing_env" "wes_hla_typing_env.yml"
+    write_manifest "wes_hla_typing_env" "wes_hla_typing_env.yml"
+fi
+
 if [ "${CREATE_CNV}" = true ]; then
     run_create "wes_cnv_env" "wes_cnv_env.yml"
     write_manifest "wes_cnv_env" "wes_cnv_env.yml"
@@ -224,11 +237,12 @@ cat > "${ENV_SH}" <<EOF
 export MAIN_ENV_PREFIX="${ENV_ROOT}/big_wes_pipeline_env"
 export VEP_ENV_PREFIX="${ENV_ROOT}/wes_vep_env"
 export HLA_ENV_PREFIX="${ENV_ROOT}/wes_hla_env"
+export HLA_TYPING_ENV_PREFIX="${ENV_ROOT}/wes_hla_typing_env"
 export CNV_ENV_PREFIX="${ENV_ROOT}/wes_cnv_env"
 export SV_ENV_PREFIX="${ENV_ROOT}/wes_sv_env"
 export JAVA_HOME="\${MAIN_ENV_PREFIX}"
 export VEP_ENV="\${VEP_ENV_PREFIX}"
-export PATH="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin:\${PATH}"
+export PATH="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${HLA_TYPING_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin:\${PATH}"
 EOF
 
 if [ "${VERIFY_INSTALL}" = true ]; then
@@ -252,6 +266,9 @@ if [ "${VERIFY_INSTALL}" = true ]; then
     if [ "${CREATE_HLA}" = true ]; then
         verify_tool "${ENV_ROOT}/wes_hla_env" "mhcflurry" mhcflurry-predict --help
     fi
+    if [ "${CREATE_HLA_TYPING}" = true ]; then
+        verify_tool "${ENV_ROOT}/wes_hla_typing_env" "HLA-LA" bash -lc 'command -v HLA-LA.pl >/dev/null'
+    fi
     if [ "${CREATE_CNV}" = true ]; then
         verify_tool "${ENV_ROOT}/wes_cnv_env" "cnvkit" cnvkit.py version
     fi
@@ -268,6 +285,7 @@ Use these paths in config.sh:
   MAIN_ENV_PREFIX="${ENV_ROOT}/big_wes_pipeline_env"
   VEP_ENV_PREFIX="${ENV_ROOT}/wes_vep_env"
   HLA_ENV_PREFIX="${ENV_ROOT}/wes_hla_env"
+  HLA_TYPING_ENV_PREFIX="${ENV_ROOT}/wes_hla_typing_env"
   CNV_ENV_PREFIX="${ENV_ROOT}/wes_cnv_env"
   SV_ENV_PREFIX="${ENV_ROOT}/wes_sv_env"
 

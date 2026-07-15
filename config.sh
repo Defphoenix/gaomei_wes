@@ -118,10 +118,11 @@ CONDA_BASE="${CONDA_BASE:-/Users/mac/anaconda3}"
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX:-${CONDA_BASE}/envs/big_wes_pipeline_env}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_vep_env}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_hla_env}"
+HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_hla_typing_env}"
 CNV_ENV_PREFIX="${CNV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_cnv_env}"
 SV_ENV_PREFIX="${SV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_sv_env}"
 
-PIPELINE_EXTRA_PATHS="${PIPELINE_EXTRA_PATHS:-${MAIN_ENV_PREFIX}/bin:${VEP_ENV_PREFIX}/bin:${HLA_ENV_PREFIX}/bin:${CNV_ENV_PREFIX}/bin:${SV_ENV_PREFIX}/bin}"
+PIPELINE_EXTRA_PATHS="${PIPELINE_EXTRA_PATHS:-${MAIN_ENV_PREFIX}/bin:${VEP_ENV_PREFIX}/bin:${HLA_ENV_PREFIX}/bin:${HLA_TYPING_ENV_PREFIX}/bin:${CNV_ENV_PREFIX}/bin:${SV_ENV_PREFIX}/bin}"
 export PATH="${PIPELINE_EXTRA_PATHS}:${PATH}"
 export VEP_ENV="${VEP_ENV:-${VEP_ENV_PREFIX}}"
 PIPELINE_JAVA_HOME="${PIPELINE_JAVA_HOME:-${MAIN_ENV_PREFIX}}"
@@ -149,6 +150,7 @@ TOOL_SNPEFF="${TOOL_SNPEFF:-snpEff}"
 TOOL_VEP="${TOOL_VEP:-${PROJECT_DIR}/scripts/run_vep_env.sh}"
 TOOL_NETMHCPAN="${TOOL_NETMHCPAN:-netMHCpan}"
 TOOL_MHCFLURRY="${TOOL_MHCFLURRY:-mhcflurry-predict}"
+TOOL_HLA_LA="${TOOL_HLA_LA:-HLA-LA.pl}"
 TOOL_SNPSIFT="${TOOL_SNPSIFT:-SnpSift}"
 TOOL_CNVKIT="${TOOL_CNVKIT:-cnvkit.py}"
 TOOL_MANTA="${TOOL_MANTA:-configManta.py}"
@@ -181,6 +183,12 @@ MUTECT2_LEARNING_DATA=""
 GERMLINE_RESOURCE_VCF="${GERMLINE_RESOURCE_VCF:-}"
 GERMLINE_RESOURCE_INDEX="${GERMLINE_RESOURCE_INDEX:-}"
 MUTECT2_CONTAMINATION_TABLE="${MUTECT2_CONTAMINATION_TABLE:-}"
+MUTECT2_SEGMENTATION_TABLE="${MUTECT2_SEGMENTATION_TABLE:-}"
+MUTECT2_ORIENTATION_MODEL="${MUTECT2_ORIENTATION_MODEL:-}"
+MUTECT2_COMMON_VARIANTS_VCF="${MUTECT2_COMMON_VARIANTS_VCF:-}"
+RUN_MUTECT2_ORIENTATION_MODEL=true        # 从Mutect2 F1R2计数学习方向偏倚模型
+RUN_MUTECT2_CONTAMINATION=true            # 使用common biallelic SNP估计肿瘤/正常污染
+MUTECT2_REQUIRE_AUXILIARY=false           # true时缺少F1R2/common SNP资源即终止
 MUTECT2_EXTRA_PARAMS="${MUTECT2_EXTRA_PARAMS:-}"
 FILTER_MUTECT_EXTRA_PARAMS="${FILTER_MUTECT_EXTRA_PARAMS:-}"
 
@@ -198,6 +206,15 @@ VEP_EXTRA_PARAMS=""
 #---------------------------------------
 # 新抗原候选肽
 #---------------------------------------
+RUN_HLA_TYPING="${RUN_HLA_TYPING:-auto}" # auto: 工具和graph齐全时运行；false: 关闭
+SKIP_HLA_TYPING=false
+HLA_TYPING_REQUIRED=false                # 生产项目可设true，缺少工具/graph时终止
+HLA_TYPING_BAM=""                        # 留空时自动使用当前样本最终BAM
+HLA_LA_GRAPH_DIR="${HLA_LA_GRAPH_DIR:-${PROJECT_DIR}/reference/hla/PRG_MHC_GRCh38_withIMGT}"
+HLA_LA_GRAPH_NAME="PRG_MHC_GRCh38_withIMGT"
+HLA_TYPING_THREADS=4
+HLA_TYPING_ALLELES_FILE=""               # somatic项目通常指向normal分型结果
+
 RUN_NEOANTIGEN=true
 NEOANTIGEN_VEP_VCF=""                     # 留空时默认使用 ${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz
 NEOANTIGEN_ANNOVAR_TXT=""                 # 可选: ANNOVAR multianno/exonic txt，用于合并到新抗原明细表
@@ -217,9 +234,19 @@ MOSDEPTH_THREADS=2
 COVERAGE_TARGETS="10,30,50,100"
 RUN_TMB=true
 TMB_CODING_SIZE=3                         # 测试区域约3Mb
-TMB_MIN_QUAL=20
+TMB_EFFECTIVE_CODING_BED=""               # 推荐: capture BED与CDS外显子求交并合并后的BED
+TMB_DENOMINATOR_VALIDATED=false           # 完成panel TMB方法学验证后才可设true
+TMB_MIN_QUAL=0                            # Mutect2 QUAL常为空；主要使用PASS和TLOD
+TMB_MIN_TLOD=6.3
 TMB_MIN_AF=0.05
-TMB_INCLUDE_TYPES="missense,nonsense,frameshift,inframe,splice"
+TMB_MIN_TUMOR_DP=20
+TMB_MIN_TUMOR_ALT_READS=5
+TMB_MIN_NORMAL_DP=10
+TMB_MAX_NORMAL_ALT_READS=2
+TMB_MAX_NORMAL_AF=0.02
+TMB_MAX_POPULATION_AF=0.001
+TMB_VEP_CONSEQUENCES="missense_variant,stop_gained,stop_lost,start_lost,frameshift_variant,inframe_insertion,inframe_deletion,splice_acceptor_variant,splice_donor_variant,protein_altering_variant"
+TMB_POPULATION_AF_FIELDS="MAX_AF,gnomADe_AF,gnomADg_AF,AF"
 
 #---------------------------------------
 # 输出目录
@@ -238,6 +265,7 @@ DIR_MSI="${RESULT_DIR}/msi"
 DIR_COVERAGE="${RESULT_DIR}/coverage"
 DIR_TMB="${RESULT_DIR}/tmb"
 DIR_NEOANTIGEN="${RESULT_DIR}/neoantigen"
+DIR_HLA_TYPING="${RESULT_DIR}/hla_typing"
 DIR_SUMMARY="${RESULT_DIR}/summary"
 DIR_MULTIQC="${RESULT_DIR}/multiqc"
 DIR_LOGS="${PROJECT_DIR}/logs"

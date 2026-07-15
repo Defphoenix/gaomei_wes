@@ -4,19 +4,20 @@
 
 这是一个以 Shell/Python 实现、可在服务器直接部署的 WES 分析项目，支持单样本
 胚系检测和肿瘤-正常配对体细胞检测，并保留单步调试入口。当前版本适合研发、
-benchmark 和流程验证；正式临床或工业交付前仍需完成 PoN/污染校正、CNV/MSI
-基线、HLA 分型、临床知识库和队列级验证。详细审计见
+benchmark 和流程验证；正式临床或工业交付前仍需完成 PoN、CNV/MSI
+基线、临床知识库和队列级验证。当前已接入 Mutect2 污染/方向偏倚校正、
+HLA*LA 分型和严格 VEP TMB，但仍须使用本实验体系验证。详细审计见
 [流程审计与更新路线](docs/pipeline_audit_zh.md)。
 
 ## 流程总览
 
 ```
 FASTQ → FastQC → 修剪 → BWA比对 → 排序索引 → 标记重复 → 比对后QC → BQSR
-  → 变异检测 → 变异过滤 → SnpEff注释 → VEP注释 → 新抗原候选肽
+  → HLA*LA分型 → 变异检测 → 污染/方向偏倚校正 → SnpEff/VEP注释 → 新抗原候选肽
   → CNV分析 → MSI检测 → 结构变异 → 覆盖度分析 → TMB计算 → MultiQC汇总
 ```
 
-## 分析模块 (共18步)
+## 分析模块 (共19步)
 
 | 步骤 | 脚本 | 工具 | 模块 | 说明 |
 |------|------|------|------|------|
@@ -27,8 +28,9 @@ FASTQ → FastQC → 修剪 → BWA比对 → 排序索引 → 标记重复 → 
 | 5 | `05_mark_duplicates.sh` | Picard / Samtools | 比对 | 标记PCR重复 |
 | 5b | `05b_post_align_qc.sh` | Picard, Samtools, Qualimap | QC | 插入片段大小、GC偏差、文库复杂度 |
 | 5c | `05c_bqsr.sh` | GATK BQSR | 校准 | 碱基质量分数重校准 |
+| 5d | `05d_hla_typing.sh` | HLA*LA | HLA | WES BAM高分辨率G-group分型，并生成binding兼容等位基因 |
 | 6 | `06_variant_calling.sh` | GATK HC / Mutect2 | 变异 | SNV/InDel检测 |
-| 7 | `07_variant_filter.sh` | GATK, BCFtools | 变异 | 变异质量过滤 |
+| 7 | `07_variant_filter.sh` | GATK, BCFtools | 变异 | LearnReadOrientationModel、污染估计和Mutect2过滤 |
 | 7b | `07b_snpeff.sh` | SnpEff, SnpSift | 注释 | 功能注释；可选叠加ClinVar/COSMIC |
 | 7c | `07c_vep.sh` | Ensembl VEP | 注释 | 转录本后果、SIFT/PolyPhen、已知变异；CADD/REVEL需插件数据 |
 | 7d | `07d_neoantigen.sh` | Python, MHCflurry/NetMHCpan(可选) | 新抗原 | 从VEP注释VCF生成候选肽FASTA和HLA结合预测 |
@@ -36,7 +38,7 @@ FASTQ → FastQC → 修剪 → BWA比对 → 排序索引 → 标记重复 → 
 | 9 | `09_msi.sh` | MSIsensor-pro | MSI | 微卫星不稳定性检测 |
 | 10 | `10_sv.sh` | Manta | SV | 结构变异 (缺失/插入/倒位/易位) |
 | 11 | `11_coverage.sh` | mosdepth, bedtools | 覆盖度 | 目标区域深度统计 |
-| 12 | `12_tmb.sh` | BCFtools | TMB | 肿瘤突变负荷计算 |
+| 12 | `12_tmb.sh` | Python, VEP CSQ | TMB | 配对证据、群体频率和有效编码区严格TMB计算 |
 | 13 | `13_final_summary.sh` | MultiQC | 汇总 | 综合QC报告 + 全模块汇总 |
 
 ## 项目结构
@@ -54,6 +56,8 @@ mutation_pipeline/
 │   ├── 05_mark_duplicates.sh     # 标记重复
 │   ├── 05b_post_align_qc.sh     # 比对后QC
 │   ├── 05c_bqsr.sh              # BQSR校准
+│   ├── 05d_hla_typing.sh        # HLA*LA分型
+│   ├── prepare_hlala_graph.sh    # HLA*LA graph校验、链接和prepare
 │   ├── 06_variant_calling.sh     # 变异检测
 │   ├── 07_variant_filter.sh      # 变异过滤
 │   ├── 07b_snpeff.sh            # SnpEff注释
@@ -65,6 +69,7 @@ mutation_pipeline/
 │   ├── 10_sv.sh                 # 结构变异
 │   ├── 11_coverage.sh           # 覆盖度分析
 │   ├── 12_tmb.sh                # TMB计算
+│   ├── tmb_from_vep.py          # 严格VEP TMB筛选
 │   └── 13_final_summary.sh      # 汇总报告
 ├── data/                         # 原始FASTQ数据
 ├── results/                      # 分析结果
@@ -73,6 +78,7 @@ mutation_pipeline/
 │   ├── aligned/                  # BAM比对文件
 │   ├── post_align_qc/            # 比对后QC指标
 │   ├── bqsr/                     # BQSR校准BAM
+│   ├── hla_typing/               # HLA完整分型和binding等位基因
 │   ├── variants/                 # 原始变异结果
 │   ├── annotation/               # 注释结果 (SnpEff/VEP)
 │   ├── neoantigen/               # 新抗原候选肽和HLA预测
@@ -118,6 +124,7 @@ bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
   --with-hla \
+  --with-hla-typing \
   --with-cnv \
   --update-existing
 ```
@@ -129,21 +136,42 @@ bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
   --with-hla \
+  --with-hla-typing \
   --with-cnv
 ```
 
-上面的推荐命令会创建四个 prefix 环境:
+上面的推荐命令会创建五个 prefix 环境:
 
 ```bash
 big_wes_pipeline_env   # 主流程: fastqc/fastp/bwa/samtools/gatk/bcftools/snpeff/mosdepth/msisensor-pro
 wes_vep_env            # VEP专用环境
 wes_hla_env            # MHCflurry HLA结合预测环境，可选
+wes_hla_typing_env     # HLA*LA分型环境，Linux可选
 wes_cnv_env            # CNVkit正式CNV分析环境，可选
 ```
 
 Manta 为归档的旧工具，Linux 服务器需要时再单独加 `--with-sv`。安装脚本会把
 实际解析到的精确包版本写入 `ENV_ROOT/manifests/`，因此 YML 保存安装需求，
 manifest 保存本次服务器安装的真实版本和 build。
+
+HLA*LA 软件环境不包含约 2.3GB 的 `PRG_MHC_GRCh38_withIMGT` 图压缩包。下载后运行：
+
+```bash
+bash scripts/prepare_hlala_graph.sh \
+  --archive /path/to/PRG_MHC_GRCh38_withIMGT.tar.gz \
+  --reference-dir /path/to/reference_data \
+  --env-prefix /PUBLIC/gomics/guofenghua/envs/wes/wes_hla_typing_env
+```
+
+脚本会校验官方MD5、解压、链接到HLA*LA环境并运行 `prepareGraph`。最终目录为：
+
+```text
+reference_data/hla/PRG_MHC_GRCh38_withIMGT/
+```
+
+下载和图结构要求见[HLA*LA使用说明](https://hpc.nih.gov/apps/HLA-LA.html)。
+图准备阶段可能需要约40GB内存。HLA*LA输出G-group/多字段结果；WES不能保证每个
+样本都无歧义达到8位。流程保留完整调用，同时另存两字段HLA-I等位基因供binding工具使用。
 
 创建完成后 source 环境辅助文件:
 
@@ -320,6 +348,7 @@ bash run_pipeline.sh check
 | SnpEff | 功能注释 | `conda install -c bioconda snpeff` |
 | SnpSift | VCF过滤/注释 | 随SnpEff安装 |
 | VEP | 功能注释 | 独立 `wes_vep_env.yml`，需要同版本离线 cache |
+| HLA*LA | WES HLA分型 | 独立 `wes_hla_typing_env.yml`；图数据需单独准备 |
 | MHCflurry | HLA结合预测 | `conda install -c bioconda mhcflurry`; 首次使用需下载模型 |
 | netMHCpan | HLA结合预测 | DTU standalone，需按官方许可手动安装 |
 
@@ -345,6 +374,9 @@ bash run_pipeline.sh check
 | VEP cache GRCh38 | VEP注释 | 推荐 | `vep_install` |
 | protein.fa | 新抗原肽段生成 | 新抗原必需 | Ensembl/GENCODE蛋白FASTA，ID需能匹配VEP的ENSP或Feature |
 | target_regions.bed | 目标区域 | WES必需 | 捕获试剂盒厂商提供 |
+| small_exac/common biallelic VCF | Mutect2污染估计 | 体细胞推荐 | 设置 `MUTECT2_COMMON_VARIANTS_VCF`，需要索引 |
+| HLA*LA PRG graph | HLA分型 | HLA分型必需 | HLA*LA官方README，约2.3GB压缩包 |
+| effective_coding.bed | TMB精确分母 | TMB推荐 | 捕获BED与CDS求交、去重合并后的版本化BED |
 | MSIsensor-pro hg38 list | MSI位点 | MSI分析 | `msisensor-pro scan` 生成，或使用预构建list/baseline |
 
 ## 输出文件说明
@@ -356,6 +388,9 @@ bash run_pipeline.sh check
 | BQSR | `bqsr/*.bqsr.bam` | 校准后BAM |
 | 比对QC | `post_align_qc/*.insert_size_metrics` | 插入片段大小 |
 | 变异 | `variants/*.pass.vcf.gz` | 过滤后变异 |
+| Mutect2 QC | `variants/*.contamination.table`, `*.segments.table`, `*.read-orientation-model.tar.gz` | 污染与方向偏倚模型 |
+| HLA分型 | `hla_typing/*_hla_typing.tsv` | HLA*LA完整G-group/多字段调用 |
+| HLA分型 | `hla_typing/*_hla_binding_alleles.txt` | HLA-I两字段binding输入 |
 | SnpEff | `annotation/*.snpeff.vcf.gz` | SnpEff注释VCF |
 | VEP | `annotation/*.vep.vcf.gz` | VEP注释VCF |
 | 新抗原 | `neoantigen/*_neoantigen_peptides.fa` | 所有候选新抗原肽段合并FASTA |
@@ -368,7 +403,8 @@ bash run_pipeline.sh check
 | SV | `sv/*.diploidSV.vcf.gz` | 结构变异 |
 | MSI | `msi/*_msi_summary.txt` | MSI状态 |
 | 覆盖度 | `coverage/*_coverage_report.txt` | 覆盖度统计 |
-| TMB | `tmb/*_tmb_result.txt` | TMB值 |
+| TMB | `tmb/*_tmb_result.txt`, `*_tmb_summary.json` | TMB值和可审计参数 |
+| TMB | `tmb/*_tmb_accepted_variants.tsv`, `*_rejected_variants.tsv` | 纳入变异及逐条排除理由 |
 | 汇总 | `summary/*_final_report.txt` | 中文文本综合报告 |
 | 汇总 | `multiqc/*_report.html` | MultiQC QC报告；不是完整临床解读报告 |
 
@@ -395,6 +431,7 @@ RUN_BQSR=true       # BQSR校准
 RUN_SNPEFF=true     # SnpEff注释
 RUN_VEP=true        # VEP注释
 RUN_NEOANTIGEN=true # 新抗原候选肽
+RUN_HLA_TYPING=auto # graph和HLA*LA可用时自动分型
 RUN_CNV=true        # CNV分析
 RUN_SV=true         # 结构变异
 RUN_MSI=true        # MSI检测
@@ -412,9 +449,12 @@ NEOANTIGEN_PROTEIN_FASTA="${PROJECT_DIR}/reference/protein.fa"
 NEOANTIGEN_PEPTIDE_LENGTHS="8-15"       # peptide mer长度；也可写 8,9,10,11
 NEOANTIGEN_PEPTIDE_FLANK=30             # 保留兼容旧参数；当前全mer生成不依赖该值
 
-# 可选: HLA结合预测
+# 可选: 自动HLA分型与结合预测
+HLA_LA_GRAPH_DIR="/reference_data/hla/PRG_MHC_GRCh38_withIMGT"
+HLA_TYPING_REQUIRED=false                 # 生产项目建议验证资源后设true
+HLA_TYPING_ALLELES_FILE=""                # 配对项目自动指向normal结果
 HLA_ALLELES="HLA-A*02:01,HLA-B*07:02"
-RUN_HLA_BINDING=false
+RUN_HLA_BINDING="auto"
 HLA_BINDING_TOOL="auto"                  # auto/netmhcpan/mhcflurry/simple
 TOOL_MHCFLURRY="mhcflurry-predict"
 TOOL_NETMHCPAN="netMHCpan"
@@ -435,7 +475,7 @@ TOOL_NETMHCPAN="netMHCpan"
      MHCflurry首次使用需运行: mhcflurry-downloads fetch models_class1_presentation
 
 说明:
-  auto模式找不到NetMHCpan/MHCflurry时会报错停止。
+  RUN_HLA_BINDING=auto时找不到NetMHCpan/MHCflurry会跳过；设为true时缺失即停止。
   simple模式必须显式指定，只用于流程连通性测试，不作为正式binding预测。
 ```
 
@@ -444,6 +484,12 @@ TOOL_NETMHCPAN="netMHCpan"
 ```bash
 bash run_pipeline.sh --config testdata/neoantigen/config_neoantigen_test.sh step 7d
 bash run_pipeline.sh --config testdata/neoantigen/config_neoantigen_test.sh status 7d
+
+# Mutect2辅助模型命令级回归测试
+bash run_pipeline.sh --config testdata/mutect2/config_mutect2_aux_test.sh step 7
+
+# 严格VEP TMB回归测试（预期2条纳入、4条排除）
+bash run_pipeline.sh --config testdata/tmb/config_tmb_test.sh step 12
 ```
 
 ## 注意事项

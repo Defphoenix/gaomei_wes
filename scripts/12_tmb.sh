@@ -1,19 +1,5 @@
 #!/bin/bash
-#===============================================================================
-# 12_tmb.sh - 肿瘤突变负荷 (TMB) 计算
-#
-# 说明: 基于变异检测结果计算TMB (Tumor Mutational Burden)
-#       TMB = 编码区体细胞突变数 / 编码区大小 (Mb)
-#       流程:
-#         1. 筛选非同义体细胞突变
-#         2. 计算编码区大小
-#         3. 计算TMB值
-#       注: TMB是免疫治疗疗效预测的重要标志物
-#
-# 输入: 注释后的VCF + SnpEff/VEP注释结果
-# 输出: TMB计算结果文件
-# 依赖: bcftools, SnpEff/VEP注释结果
-#===============================================================================
+# Strict TMB calculation from VEP CSQ, paired sample evidence and an effective coding denominator.
 
 set -euo pipefail
 
@@ -22,204 +8,83 @@ CONFIG_FILE="${CONFIG_FILE:-${SCRIPT_DIR}/../config.sh}"
 source "${CONFIG_FILE}"
 source "${SCRIPT_DIR}/utils.sh"
 
-#---------------------------------------
-# 主函数
-#---------------------------------------
 main() {
-    log_step "步骤12: TMB 肿瘤突变负荷计算"
-
-    if [ "${SKIP_TMB}" = true ] || [ "${RUN_TMB}" = false ]; then
-        log_warn "跳过TMB计算 (SKIP_TMB=${SKIP_TMB})"
+    log_step "步骤12: 基于VEP注释的严格TMB计算"
+    if [ "${SKIP_TMB:-false}" = true ] || [ "${RUN_TMB:-false}" = false ]; then
+        log_warn "跳过TMB计算"
         return 0
     fi
 
+    local input_vcf="${TMB_VEP_VCF:-${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz}"
+    local coding_bed="${TMB_EFFECTIVE_CODING_BED:-}"
+    local accepted="${DIR_TMB}/${SAMPLE_ID}_tmb_accepted_variants.tsv"
+    local rejected="${DIR_TMB}/${SAMPLE_ID}_tmb_rejected_variants.tsv"
+    local summary_json="${DIR_TMB}/${SAMPLE_ID}_tmb_summary.json"
+    local summary_tsv="${DIR_TMB}/${SAMPLE_ID}_tmb_summary.tsv"
+    local report="${DIR_TMB}/${SAMPLE_ID}_tmb_result.txt"
+    local bed_param=""
+
     mkdir -p "${DIR_TMB}"
-
-    # 确定输入VCF (优先使用注释后的VCF)
-    local input_vcf=""
-    if [ -f "${DIR_ANNOTATION}/${SAMPLE_ID}.snpeff.vcf.gz" ]; then
-        input_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.snpeff.vcf.gz"
-        log_info "使用SnpEff注释VCF: ${input_vcf}"
-    elif [ -f "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz" ]; then
-        input_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
-        log_info "使用VEP注释VCF: ${input_vcf}"
-    elif [ "${CALLER_MODE}" = "haplotypecaller" ] || [ "${CALLER_MODE}" = "hc" ]; then
-        input_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.pass.vcf.gz"
-    elif [ "${CALLER_MODE}" = "mutect2" ] || [ "${CALLER_MODE}" = "mt2" ]; then
-        input_vcf="${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.pass.vcf.gz"
-    fi
-
-    if [ -z "${input_vcf}" ] || [ ! -f "${input_vcf}" ]; then
-        log_error "未找到可用的VCF文件进行TMB计算!"
-        return 1
-    fi
-
-    # 输出文件
-    local tmb_result="${DIR_TMB}/${SAMPLE_ID}_tmb_result.txt"
-    local tmb_variants="${DIR_TMB}/${SAMPLE_ID}_tmb_variants.txt"
-    local tmb_gene_list="${DIR_TMB}/${SAMPLE_ID}_tmb_genes.txt"
-
-    #---------------------------------------
-    # 步骤1: 筛选用于TMB计算的变异
-    #---------------------------------------
-    # TMB计算标准:
-    #   - 非同义突变 (missense, nonsense, frameshift, splice等)
-    #   - 排除同义突变
-    #   - 过滤低质量/低频变异
-    #   - 可选: 排除已知胚系变异 (dbSNP common)
-
-    log_info "筛选TMB相关变异..."
-
-    # 提取所有变异
-    local total_variants=0
-    if [ -f "${input_vcf}" ]; then
-        total_variants=$(${TOOL_BCFTOOLS} view -H "${input_vcf}" 2>/dev/null | wc -l || echo "0")
-    fi
-    log_info "总变异数: ${total_variants}"
-
-    # 筛选非同义突变 (基于SnpEff注释)
-    {
-        echo "# 用于TMB计算的变异列表"
-        echo "# 样本: ${SAMPLE_ID}"
-        echo "# 筛选条件: 非同义突变, QUAL>=${TMB_MIN_QUAL}, AF>=${TMB_MIN_AF}"
-        echo "#"
-        echo "# CHROM  POS  REF  ALT  GENE  EFFECT  QUAL  AF"
-    } > "${tmb_variants}"
-
-    local tmb_count=0
-
-    if [ -f "${input_vcf}" ]; then
-        # 使用bcftools query提取信息
-        # 如果有SnpEff注释，提取ANN字段
-        if ${TOOL_BCFTOOLS} view -h "${input_vcf}" 2>/dev/null | grep -q "SnpEff"; then
-            ${TOOL_BCFTOOLS} query \
-                -f '%CHROM\t%POS\t%REF\t%ALT\t%QUAL\t%INFO/ANN\n' \
-                "${input_vcf}" 2>/dev/null | \
-            while IFS=$'\t' read -r chrom pos ref alt qual ann; do
-                # 解析SnpEff注释
-                local effect=$(echo "${ann}" | tr ',' '\n' | head -1 | awk -F'|' '{print $2}')
-                local gene=$(echo "${ann}" | tr ',' '\n' | head -1 | awk -F'|' '{print $4}')
-
-                # 检查是否是非同义突变
-                if echo "${TMB_INCLUDE_TYPES}" | grep -qi "${effect}"; then
-                    echo -e "${chrom}\t${pos}\t${ref}\t${alt}\t${gene}\t${effect}\t${qual}"
-                fi
-            done >> "${tmb_variants}"
-        else
-            # 无SnpEff注释时，使用基本过滤
-            # 只保留SNP和InDel，过滤QUAL
-            ${TOOL_BCFTOOLS} view \
-                -f PASS \
-                -m2 -M2 \
-                --min-ac 1 \
-                "${input_vcf}" 2>/dev/null | \
-                ${TOOL_BCFTOOLS} query \
-                -f '%CHROM\t%POS\t%REF\t%ALT\t%QUAL\tno_annotation\n' \
-                >> "${tmb_variants}" 2>/dev/null || true
-        fi
-    fi
-
-    # 计算TMB相关变异数
-    tmb_count=$(grep -v "^#" "${tmb_variants}" | wc -l || echo "0")
-
-    #---------------------------------------
-    # 步骤2: 计算编码区大小
-    #---------------------------------------
-    local coding_region_size="${TMB_CODING_SIZE}"
-
-    # 如果有BED文件，可以精确计算编码区大小
-    if [ -n "${INTERVAL_FILE}" ] && [ -f "${INTERVAL_FILE}" ]; then
-        local bed_size
-        bed_size=$(awk '{sum+=$3-$2} END{printf "%.0f", sum/1000000}' "${INTERVAL_FILE}" 2>/dev/null || echo "${TMB_CODING_SIZE}")
-        if [ "${bed_size}" -gt 0 ] 2>/dev/null; then
-            coding_region_size="${bed_size}"
-            log_info "使用BED文件计算的编码区大小: ${coding_region_size} Mb"
+    check_file "VEP注释VCF" "${input_vcf}" || return 1
+    check_tool "Python3" "${TOOL_PYTHON:-python3}" || return 1
+    if [ -n "${coding_bed}" ]; then
+        check_file "TMB有效编码区BED" "${coding_bed}" || return 1
+        bed_param="--effective-coding-bed ${coding_bed}"
+        if [ "${TMB_DENOMINATOR_VALIDATED:-false}" != true ]; then
+            log_warn "当前BED尚未标记为经过panel验证的有效编码区；TMB仅作为研发结果"
         fi
     else
-        log_info "使用默认编码区大小: ${coding_region_size} Mb"
+        log_warn "未配置TMB_EFFECTIVE_CODING_BED，使用配置的固定分母 ${TMB_CODING_SIZE:-0} Mb"
     fi
 
-    #---------------------------------------
-    # 步骤3: 计算TMB
-    #---------------------------------------
-    local tmb_value="N/A"
-    if [ "${tmb_count}" -gt 0 ] && [ "${coding_region_size}" != "0" ]; then
-        tmb_value=$(awk "BEGIN{printf \"%.2f\", ${tmb_count}/${coding_region_size}}")
-    fi
+    run_cmd "严格筛选VEP体细胞突变并计算TMB" \
+        "${TOOL_PYTHON:-python3}" "${SCRIPT_DIR}/tmb_from_vep.py" \
+        --vcf "${input_vcf}" \
+        --accepted "${accepted}" \
+        --rejected "${rejected}" \
+        --summary-json "${summary_json}" \
+        --summary-tsv "${summary_tsv}" \
+        --tumor-sample "${TUMOR_SAMPLE_ID:-${SAMPLE_ID}}" \
+        --normal-sample "${NORMAL_SAMPLE_ID:-}" \
+        ${bed_param} \
+        --denominator-mb "${TMB_CODING_SIZE:-0}" \
+        --denominator-validated "${TMB_DENOMINATOR_VALIDATED:-false}" \
+        --min-qual "${TMB_MIN_QUAL:-0}" \
+        --min-tlod "${TMB_MIN_TLOD:-6.3}" \
+        --min-tumor-dp "${TMB_MIN_TUMOR_DP:-20}" \
+        --min-tumor-alt-reads "${TMB_MIN_TUMOR_ALT_READS:-5}" \
+        --min-tumor-af "${TMB_MIN_AF:-0.05}" \
+        --min-normal-dp "${TMB_MIN_NORMAL_DP:-10}" \
+        --max-normal-alt-reads "${TMB_MAX_NORMAL_ALT_READS:-2}" \
+        --max-normal-af "${TMB_MAX_NORMAL_AF:-0.02}" \
+        --max-population-af "${TMB_MAX_POPULATION_AF:-0.001}" \
+        --consequences "${TMB_VEP_CONSEQUENCES}" \
+        --population-fields "${TMB_POPULATION_AF_FIELDS:-MAX_AF,gnomADe_AF,gnomADg_AF,AF}"
 
-    #---------------------------------------
-    # 步骤4: 提取突变基因列表
-    #---------------------------------------
-    grep -v "^#" "${tmb_variants}" 2>/dev/null | \
-        awk -F'\t' '{print $5}' | sort | uniq -c | sort -rn | \
-        head -50 > "${tmb_gene_list}" 2>/dev/null || true
+    "${TOOL_PYTHON:-python3}" - "${summary_json}" > "${report}" <<'PY'
+import json
+import sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+tmb = float(data["tmb_mutations_per_mb"])
+level = "TMB-H" if tmb >= 10 else ("TMB-中等" if tmb >= 5 else "TMB-L")
+print("TMB（肿瘤突变负荷）严格计算结果")
+print("=" * 42)
+print(f"输入VCF: {data['input_vcf']}")
+print(f"肿瘤样本: {data['tumor_sample']}")
+print(f"配对正常样本: {data['normal_sample'] or '无'}")
+print(f"纳入突变数: {data['accepted_variants']}")
+print(f"排除突变数: {data['rejected_variants']}")
+print(f"有效编码区: {data['denominator_mb']:.6f} Mb ({data['denominator_source']})")
+print(f"分母验证状态: {'已验证' if data['denominator_validated'] else '未验证（研发用途）'}")
+print(f"TMB: {tmb:.4f} mutations/Mb")
+print(f"分层: {level}")
+print("说明: 分层阈值仅作流程展示，临床使用必须按癌种、panel和验证方案校准。")
+PY
 
-    #---------------------------------------
-    # 步骤5: 生成TMB报告
-    #---------------------------------------
-    {
-        echo "TMB (肿瘤突变负荷) 计算结果"
-        echo "================================"
-        echo "样本ID:          ${SAMPLE_ID}"
-        echo "样本类型:        ${SAMPLE_TYPE}"
-        echo "计算时间:        $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "输入VCF:         ${input_vcf}"
-        echo ""
-        echo "【TMB计算】"
-        echo "────────────────────────────────"
-        echo "总变异数:              ${total_variants}"
-        echo "TMB相关变异数:         ${tmb_count}"
-        echo "编码区大小:            ${coding_region_size} Mb"
-        echo "TMB值:                 ${tmb_value} muts/Mb"
-        echo ""
-
-        # TMB临床解读
-        if [ "${tmb_value}" != "N/A" ]; then
-            echo "【TMB临床解读】"
-            echo "────────────────────────────────"
-            if awk "BEGIN{exit !(${tmb_value} >= 10)}"; then
-                echo "TMB-HIGH (>=10 muts/Mb)"
-                echo "  -> 可能从免疫检查点抑制剂治疗中获益"
-                echo "  -> 参考: FDA批准帕博利珠单抗用于TMB-H (>=10)实体瘤"
-            elif awk "BEGIN{exit !(${tmb_value} >= 5)}"; then
-                echo "TMB-INTERMEDIATE (5-10 muts/Mb)"
-                echo "  -> 中等突变负荷，临床意义需结合其他指标"
-            else
-                echo "TMB-LOW (<5 muts/Mb)"
-                echo "  -> 低突变负荷"
-            fi
-        fi
-        echo ""
-
-        # 变异类型分布
-        echo "【变异类型分布】"
-        echo "────────────────────────────────"
-        grep -v "^#" "${tmb_variants}" 2>/dev/null | \
-            awk -F'\t' '{print $6}' | sort | uniq -c | sort -rn || echo "无数据"
-        echo ""
-
-        # 高频突变基因
-        echo "【高频突变基因 (Top 20)】"
-        echo "────────────────────────────────"
-        if [ -f "${tmb_gene_list}" ] && [ -s "${tmb_gene_list}" ]; then
-            head -20 "${tmb_gene_list}"
-        else
-            echo "无基因注释数据"
-        fi
-        echo ""
-
-        # 各染色体变异分布
-        echo "【各染色体变异分布】"
-        echo "────────────────────────────────"
-        grep -v "^#" "${tmb_variants}" 2>/dev/null | \
-            awk -F'\t' '{print $1}' | sort -V | uniq -c | sort -rn || echo "无数据"
-
-    } > "${tmb_result}"
-
-    log_info "TMB计算完成!"
-    log_info "TMB值: ${tmb_value} muts/Mb"
-    log_info "结果文件: ${tmb_result}"
-    cat "${tmb_result}"
+    log_info "TMB结果: ${report}"
+    log_info "纳入明细: ${accepted}"
+    log_info "排除及原因: ${rejected}"
+    cat "${report}"
 }
 
 main "$@"

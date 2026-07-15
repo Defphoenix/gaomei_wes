@@ -1,0 +1,9 @@
+name: wes_hla_typing_env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - hla-la=1.0.4
+  - samtools
+  - python=3.10
+

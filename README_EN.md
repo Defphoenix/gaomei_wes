@@ -12,8 +12,8 @@ and a governed interpretation layer.
 
 ```text
 FASTQ -> FastQC -> fastp -> BWA-MEM -> sort/index -> duplicate marking
-      -> post-alignment QC -> optional BQSR
-      -> HaplotypeCaller or matched Mutect2 -> filtering
+      -> post-alignment QC -> optional BQSR -> optional HLA*LA typing
+      -> HaplotypeCaller or matched Mutect2 -> contamination/orientation filtering
       -> optional SnpEff/VEP -> neoantigen peptides -> optional HLA binding
       -> optional CNV/MSI/SV -> coverage/TMB -> summary/MultiQC
 ```
@@ -22,13 +22,16 @@ The project supports:
 
 - Single-sample germline calling with HaplotypeCaller.
 - Matched tumor-normal somatic calling with Mutect2.
+- Mutect2 orientation-bias modeling and paired contamination estimation.
+- Optional HLA*LA G-group typing with separate two-field class-I binding alleles.
+- Strict VEP-CSQ TMB filtering with auditable accepted/rejected tables.
 - One-command project execution plus `step` and `from` debugging.
 - VEP 115 offline annotation and 8-15mer neoantigen peptide generation.
 - Optional MHCflurry/NetMHCpan binding prediction when HLA alleles are supplied.
 - Optional CNVkit, MSIsensor-pro, Manta, coverage, TMB, and summary modules.
 
-It does not yet provide cohort joint genotyping, automatic HLA typing, a full
-Mutect2 contamination/orientation-bias workflow, or a validated clinical report.
+It does not yet provide cohort joint genotyping, assay-calibrated CNV/MSI/TMB
+references, or a validated clinical interpretation report.
 See [the Chinese audit and roadmap](docs/pipeline_audit_zh.md) for details.
 
 ## Install With Mamba
@@ -41,6 +44,7 @@ bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
   --with-hla \
+  --with-hla-typing \
   --with-cnv
 ```
 
@@ -51,6 +55,7 @@ Created environments:
 | `big_wes_pipeline_env` | Core QC, alignment, GATK, VCF, MSI, and reporting tools |
 | `wes_vep_env` | Ensembl VEP 115 |
 | `wes_hla_env` | Optional MHCflurry binding prediction |
+| `wes_hla_typing_env` | Optional Linux HLA*LA typing |
 | `wes_cnv_env` | Optional CNVkit analysis |
 | `wes_sv_env` | Optional archived Manta 1.6.0; add `--with-sv` on Linux |
 
@@ -86,6 +91,9 @@ reference_data/
   1000G_phase1.snps.high_confidence.hg38.vcf.gz[.tbi]
   vep_cache/homo_sapiens/115_GRCh38/
   protein/protein.fa
+  mutect2/small_exac_common_3.hg38.vcf.gz[.tbi]
+  hla/PRG_MHC_GRCh38_withIMGT/
+  tmb/effective_coding_regions.bed
   msisensor/hg38.list
   capture_targets.bed
 ```
@@ -93,6 +101,13 @@ reference_data/
 Use a capture BED matching the actual WES kit. A Mutect2 panel of normals,
 population germline resource, CNVkit reference, and MSI baseline are
 project/cohort resources rather than universal files.
+
+HLA*LA software is installed by mamba, but its approximately 2.3 GB graph is a
+separate resource. Run `scripts/prepare_hlala_graph.sh` with the downloaded graph
+archive, reference root, and HLA typing env prefix. The helper verifies the
+official MD5, extracts, links, and runs `prepareGraph`. Graph preparation can
+require about 40 GB RAM; see the [HLA*LA usage page](https://hpc.nih.gov/apps/HLA-LA.html).
+Full G-group calls are preserved; two-field alleles are derived only for binding predictors.
 
 ## Create And Run A Matched Project
 

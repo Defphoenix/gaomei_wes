@@ -15,9 +15,10 @@ apply_runtime_defaults() {
     MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX:-${CONDA_BASE}/envs/big_wes_pipeline_env}"
     VEP_ENV_PREFIX="${VEP_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_vep_env}"
     HLA_ENV_PREFIX="${HLA_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_hla_env}"
+    HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_hla_typing_env}"
     CNV_ENV_PREFIX="${CNV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_cnv_env}"
     SV_ENV_PREFIX="${SV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_sv_env}"
-    PIPELINE_EXTRA_PATHS="${PIPELINE_EXTRA_PATHS:-${MAIN_ENV_PREFIX}/bin:${VEP_ENV_PREFIX}/bin:${HLA_ENV_PREFIX}/bin:${CNV_ENV_PREFIX}/bin:${SV_ENV_PREFIX}/bin}"
+    PIPELINE_EXTRA_PATHS="${PIPELINE_EXTRA_PATHS:-${MAIN_ENV_PREFIX}/bin:${VEP_ENV_PREFIX}/bin:${HLA_ENV_PREFIX}/bin:${HLA_TYPING_ENV_PREFIX}/bin:${CNV_ENV_PREFIX}/bin:${SV_ENV_PREFIX}/bin}"
     export PATH="${PIPELINE_EXTRA_PATHS}:${PATH}"
     export VEP_ENV="${VEP_ENV:-${VEP_ENV_PREFIX}}"
     PIPELINE_JAVA_HOME="${PIPELINE_JAVA_HOME:-${MAIN_ENV_PREFIX}}"
@@ -165,6 +166,7 @@ print_runtime_config() {
     log_info "MAIN_ENV_PREFIX: ${MAIN_ENV_PREFIX:-未设置}"
     log_info "VEP_ENV_PREFIX: ${VEP_ENV_PREFIX:-未设置}"
     log_info "HLA_ENV_PREFIX: ${HLA_ENV_PREFIX:-未设置}"
+    log_info "HLA_TYPING_ENV_PREFIX: ${HLA_TYPING_ENV_PREFIX:-未设置}"
     log_info "CNV_ENV_PREFIX: ${CNV_ENV_PREFIX:-未设置}"
     log_info "SV_ENV_PREFIX: ${SV_ENV_PREFIX:-未设置}"
     log_info "PIPELINE_EXTRA_PATHS: ${PIPELINE_EXTRA_PATHS:-未设置}"
@@ -270,7 +272,7 @@ check_analysis_tools() {
     check_tool_optional "Qualimap" "${TOOL_QUALIMAP}" || true
 
     # HLA binding predictors
-    if [ "${RUN_HLA_BINDING:-false}" = true ]; then
+    if [ "${RUN_HLA_BINDING:-false}" != false ]; then
         if command -v "${TOOL_NETMHCPAN:-netMHCpan}" &>/dev/null; then
             check_tool_optional "netMHCpan" "${TOOL_NETMHCPAN:-netMHCpan}" || true
         elif command -v "${TOOL_MHCFLURRY:-mhcflurry-predict}" &>/dev/null; then
@@ -278,6 +280,11 @@ check_analysis_tools() {
         else
             log_warn "netMHCpan和mhcflurry-predict均不可用；auto模式会停止，simple仅可显式用于连通性测试"
         fi
+    fi
+
+    if [ "${RUN_HLA_TYPING:-false}" != false ]; then
+        check_tool_optional "HLA*LA" "${TOOL_HLA_LA:-HLA-LA.pl}" || \
+            log_warn "HLA*LA不可用；RUN_HLA_TYPING=auto时将跳过，required模式会终止"
     fi
 
     return 0

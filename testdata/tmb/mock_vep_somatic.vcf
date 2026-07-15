@@ -1,0 +1,15 @@
+##fileformat=VCFv4.2
+##INFO=<ID=TLOD,Number=A,Type=Float,Description="Log 10 odds ratio score of variant existing versus not existing">
+##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: Allele|Consequence|SYMBOL|Feature|HGVSc|HGVSp|CANONICAL|MANE_SELECT|MAX_AF|gnomADe_AF|gnomADg_AF|AF">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+##FORMAT=<ID=AF,Number=A,Type=Float,Description="Allele fraction">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Depth">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	normal01	tumor01
+chr1	120	.	A	T	.	PASS	TLOD=12.0;CSQ=T|missense_variant|TP53|ENST00000269305|ENST00000269305.9:c.215C>G|ENSP00000269305.4:p.Pro72Arg|YES|NM_000546.6|0.0001|0.0001||	GT:AD:AF:DP	0/0:100,0:0.0:100	0/1:60,40:0.4:100
+chr1	130	.	C	G	.	PASS	TLOD=15.0;CSQ=G|synonymous_variant|TP53|ENST00000269305|c.300C>G|p.Pro100=|YES|NM_000546.6|0|||0	GT:AD:AF:DP	0/0:100,0:0.0:100	0/1:70,30:0.3:100
+chr1	140	.	G	A	.	PASS	TLOD=20.0;CSQ=A|missense_variant|BRCA1|ENST00000357654|c.500G>A|p.Gly167Asp|YES|NM_007294.4|0.01|0.01||	GT:AD:AF:DP	0/0:100,0:0.0:100	0/1:70,30:0.3:100
+chr1	160	.	T	C	.	PASS	TLOD=18.0;CSQ=C|stop_gained|ERBB2|ENST00000269571|c.700T>C|p.Tyr234Ter|YES|NM_004448.4|0|||0	GT:AD:AF:DP	0/1:85,15:0.15:100	0/1:60,40:0.4:100
+chr1	500	.	A	G	.	PASS	TLOD=11.0;CSQ=G|missense_variant|TP53|ENST00000269305|c.800A>G|p.Asn267Ser|YES|NM_000546.6|0|||0	GT:AD:AF:DP	0/0:100,0:0.0:100	0/1:60,40:0.4:100
+chr2	150	.	AT	A	.	PASS	TLOD=13.0;CSQ=A|frameshift_variant|BRCA1|ENST00000357654|c.900del|p.Lys301fs|YES|NM_007294.4|0|||0	GT:AD:AF:DP	0/0:100,0:0.0:100	0/1:75,25:0.25:100
+

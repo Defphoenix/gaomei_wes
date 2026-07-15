@@ -21,6 +21,7 @@ ENV_ROOT=""
 MAIN_ENV_PREFIX_OVERRIDE=""
 VEP_ENV_PREFIX_OVERRIDE=""
 HLA_ENV_PREFIX_OVERRIDE=""
+HLA_TYPING_ENV_PREFIX_OVERRIDE=""
 CNV_ENV_PREFIX_OVERRIDE=""
 SV_ENV_PREFIX_OVERRIDE=""
 INCLUDE_TESTDATA=true
@@ -47,6 +48,7 @@ Options:
   --main-env-prefix DIR       Full path to big_wes_pipeline_env. Overrides --env-root for main tools.
   --vep-env-prefix DIR        Full path to wes_vep_env. Overrides --env-root for VEP.
   --hla-env-prefix DIR        Full path to wes_hla_env. Overrides --env-root for HLA.
+  --hla-typing-env-prefix DIR Full path to wes_hla_typing_env. Overrides --env-root.
   --cnv-env-prefix DIR        Full path to wes_cnv_env. Overrides --env-root for CNVkit.
   --sv-env-prefix DIR         Full path to wes_sv_env. Overrides --env-root for Manta.
   --no-testdata               Do not copy bundled testdata/demo FASTQ.
@@ -173,6 +175,7 @@ while [ $# -gt 0 ]; do
         --main-env-prefix) MAIN_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --vep-env-prefix) VEP_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --hla-env-prefix) HLA_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
+        --hla-typing-env-prefix) HLA_TYPING_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --cnv-env-prefix) CNV_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --sv-env-prefix) SV_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --no-testdata) INCLUDE_TESTDATA=false; shift ;;
@@ -253,20 +256,41 @@ if [ -n "${ENV_ROOT}" ]; then
     MAIN_ENV_PREFIX="${ENV_ROOT}/big_wes_pipeline_env"
     VEP_ENV_PREFIX="${ENV_ROOT}/wes_vep_env"
     HLA_ENV_PREFIX="${ENV_ROOT}/wes_hla_env"
+    HLA_TYPING_ENV_PREFIX="${ENV_ROOT}/wes_hla_typing_env"
     CNV_ENV_PREFIX="${ENV_ROOT}/wes_cnv_env"
     SV_ENV_PREFIX="${ENV_ROOT}/wes_sv_env"
 else
     MAIN_ENV_PREFIX="${CONDA_BASE}/envs/big_wes_pipeline_env"
     VEP_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_vep_env"
     HLA_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_hla_env"
+    HLA_TYPING_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_hla_typing_env"
     CNV_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_cnv_env"
     SV_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_sv_env"
 fi
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX_OVERRIDE:-${MAIN_ENV_PREFIX}}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX_OVERRIDE:-${VEP_ENV_PREFIX}}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX_OVERRIDE:-${HLA_ENV_PREFIX}}"
+HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX_OVERRIDE:-${HLA_TYPING_ENV_PREFIX}}"
 CNV_ENV_PREFIX="${CNV_ENV_PREFIX_OVERRIDE:-${CNV_ENV_PREFIX}}"
 SV_ENV_PREFIX="${SV_ENV_PREFIX_OVERRIDE:-${SV_ENV_PREFIX}}"
+
+MUTECT2_COMMON_VCF="${REFERENCE_DIR}/mutect2/small_exac_common_3.hg38.vcf.gz"
+MUTECT2_AUX_REQUIRED=false
+if [ -f "${MUTECT2_COMMON_VCF}" ] && { [ -f "${MUTECT2_COMMON_VCF}.tbi" ] || [ -f "${MUTECT2_COMMON_VCF}.idx" ]; }; then
+    MUTECT2_AUX_REQUIRED=true
+else
+    echo "[WARN] Mutect2 contamination resource not found or unindexed: ${MUTECT2_COMMON_VCF}" >&2
+    echo "       Project will retain orientation modeling but skip contamination estimation until configured." >&2
+fi
+
+TMB_CODING_BED="${REFERENCE_DIR}/tmb/effective_coding_regions.bed"
+TMB_DENOMINATOR_VALIDATED=true
+if [ ! -f "${TMB_CODING_BED}" ]; then
+    TMB_CODING_BED="${INTERVAL_BED}"
+    TMB_DENOMINATOR_VALIDATED=false
+    echo "[WARN] Validated TMB coding BED not found: ${REFERENCE_DIR}/tmb/effective_coding_regions.bed" >&2
+    echo "       Capture BED will be used as an unvalidated development denominator." >&2
+fi
 
 write_common_config() {
     local sample_id="$1"
@@ -275,6 +299,10 @@ write_common_config() {
     local r2="$4"
     local result_dir="$5"
     local config_file="$6"
+    local run_hla_typing="false"
+    if [ "${sample_type}" = "normal" ]; then
+        run_hla_typing="auto"
+    fi
 
     cat > "${config_file}" <<EOF
 #!/bin/bash
@@ -293,9 +321,10 @@ CONDA_BASE="${CONDA_BASE}"
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX}"
+HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX}"
 CNV_ENV_PREFIX="${CNV_ENV_PREFIX}"
 SV_ENV_PREFIX="${SV_ENV_PREFIX}"
-PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
+PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${HLA_TYPING_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
 export PATH="\${PIPELINE_EXTRA_PATHS}:\${PATH}"
 export VEP_ENV="\${VEP_ENV_PREFIX}"
 PIPELINE_JAVA_HOME="\${MAIN_ENV_PREFIX}"
@@ -314,12 +343,21 @@ DBSNP_VCF_INDEX="\${DBSNP_VCF}.tbi"
 MILLS_VCF="${REFERENCE_DIR}/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
 THOUSAND_G_VCF="${REFERENCE_DIR}/1000G_phase1.snps.high_confidence.hg38.vcf.gz"
 VEP_CACHE_DIR="${REFERENCE_DIR}/vep_cache"
+MUTECT2_COMMON_VARIANTS_VCF="${MUTECT2_COMMON_VCF}"
+RUN_MUTECT2_ORIENTATION_MODEL=true
+RUN_MUTECT2_CONTAMINATION=true
+MUTECT2_REQUIRE_AUXILIARY="${MUTECT2_AUX_REQUIRED}"
 VEP_FASTA="\${REFERENCE_GENOME}"
 NEOANTIGEN_ANNOVAR_TXT=""
 NEOANTIGEN_PROTEIN_FASTA="${REFERENCE_DIR}/protein/protein.fa"
 NEOANTIGEN_PEPTIDE_LENGTHS="8-15"
+RUN_HLA_TYPING="${run_hla_typing}"
+HLA_TYPING_REQUIRED=false
+HLA_LA_GRAPH_DIR="${REFERENCE_DIR}/hla/PRG_MHC_GRCh38_withIMGT"
 INTERVAL_FILE="${INTERVAL_BED}"
 CNVKIT_TARGET_BED="${INTERVAL_BED}"
+TMB_EFFECTIVE_CODING_BED="${TMB_CODING_BED}"
+TMB_DENOMINATOR_VALIDATED="${TMB_DENOMINATOR_VALIDATED}"
 
 RESULT_DIR="${result_dir}"
 DIR_FASTQC="\${RESULT_DIR}/fastqc"
@@ -335,6 +373,7 @@ DIR_MSI="\${RESULT_DIR}/msi"
 DIR_COVERAGE="\${RESULT_DIR}/coverage"
 DIR_TMB="\${RESULT_DIR}/tmb"
 DIR_NEOANTIGEN="\${RESULT_DIR}/neoantigen"
+DIR_HLA_TYPING="\${RESULT_DIR}/hla_typing"
 DIR_SUMMARY="\${RESULT_DIR}/summary"
 DIR_MULTIQC="\${RESULT_DIR}/multiqc"
 DIR_LOGS="${OUT_DIR}/logs"
@@ -388,9 +427,10 @@ CONDA_BASE="${CONDA_BASE}"
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX}"
+HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX}"
 CNV_ENV_PREFIX="${CNV_ENV_PREFIX}"
 SV_ENV_PREFIX="${SV_ENV_PREFIX}"
-PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
+PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${HLA_TYPING_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
 export PATH="\${PIPELINE_EXTRA_PATHS}:\${PATH}"
 export VEP_ENV="\${VEP_ENV_PREFIX}"
 PIPELINE_JAVA_HOME="\${MAIN_ENV_PREFIX}"
@@ -410,12 +450,21 @@ DBSNP_VCF_INDEX="\${DBSNP_VCF}.tbi"
 MILLS_VCF="${REFERENCE_DIR}/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
 THOUSAND_G_VCF="${REFERENCE_DIR}/1000G_phase1.snps.high_confidence.hg38.vcf.gz"
 VEP_CACHE_DIR="${REFERENCE_DIR}/vep_cache"
+MUTECT2_COMMON_VARIANTS_VCF="${MUTECT2_COMMON_VCF}"
+RUN_MUTECT2_ORIENTATION_MODEL=true
+RUN_MUTECT2_CONTAMINATION=true
+MUTECT2_REQUIRE_AUXILIARY="${MUTECT2_AUX_REQUIRED}"
 VEP_FASTA="\${REFERENCE_GENOME}"
 NEOANTIGEN_ANNOVAR_TXT=""
 NEOANTIGEN_PROTEIN_FASTA="${REFERENCE_DIR}/protein/protein.fa"
 NEOANTIGEN_PEPTIDE_LENGTHS="8-15"
+RUN_HLA_TYPING=false
+HLA_LA_GRAPH_DIR="${REFERENCE_DIR}/hla/PRG_MHC_GRCh38_withIMGT"
+HLA_TYPING_ALLELES_FILE="${NORMAL_RESULT_DIR}/hla_typing/${NORMAL_ID}_hla_binding_alleles.txt"
 INTERVAL_FILE="${INTERVAL_BED}"
 CNVKIT_TARGET_BED="${INTERVAL_BED}"
+TMB_EFFECTIVE_CODING_BED="${TMB_CODING_BED}"
+TMB_DENOMINATOR_VALIDATED="${TMB_DENOMINATOR_VALIDATED}"
 
 RESULT_DIR="${SOMATIC_RESULT_DIR}"
 DIR_FASTQC="\${RESULT_DIR}/fastqc"
@@ -431,6 +480,7 @@ DIR_MSI="\${RESULT_DIR}/msi"
 DIR_COVERAGE="\${RESULT_DIR}/coverage"
 DIR_TMB="\${RESULT_DIR}/tmb"
 DIR_NEOANTIGEN="\${RESULT_DIR}/neoantigen"
+DIR_HLA_TYPING="\${RESULT_DIR}/hla_typing"
 DIR_SUMMARY="\${RESULT_DIR}/summary"
 DIR_MULTIQC="\${RESULT_DIR}/multiqc"
 DIR_LOGS="${OUT_DIR}/logs"
@@ -440,7 +490,8 @@ RUN_BQSR=false
 RUN_SNPEFF=false
 RUN_VEP=true
 RUN_NEOANTIGEN=true
-RUN_HLA_BINDING=false
+RUN_HLA_BINDING="auto"
+HLA_BINDING_TOOL="auto"
 RUN_CNV=true
 RUN_SV=false
 RUN_MSI=true

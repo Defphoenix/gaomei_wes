@@ -32,6 +32,7 @@ bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
   --with-hla \
+  --with-hla-typing \
   --with-cnv \
   --update-existing
 ```
@@ -68,6 +69,7 @@ bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
   --with-hla \
+  --with-hla-typing \
   --with-cnv
 ```
 
@@ -79,6 +81,8 @@ Picard is installed in the core environment. CNVkit is isolated in
 `wes_cnv_env` because its R/Python dependencies are much larger. Manta is also
 isolated and is only created with `--with-sv`; use it on Linux only. The
 installer writes exact resolved versions under `ENV_ROOT/manifests/`.
+HLA*LA is isolated in the Linux-only `wes_hla_typing_env`; its graph reference
+is downloaded and prepared separately under `reference_data/hla/`.
 
 If a previous failed environment directory exists, either remove it manually
 after confirming the path, or let the installer clean only incomplete prefix
@@ -89,6 +93,7 @@ bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
   --with-hla \
+  --with-hla-typing \
   --clean-incomplete
 ```
 
@@ -98,6 +103,7 @@ Then use these paths in generated configs:
 MAIN_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/big_wes_pipeline_env
 VEP_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_vep_env
 HLA_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_hla_env
+HLA_TYPING_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_hla_typing_env
 CNV_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_cnv_env
 SV_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_sv_env
 ```
@@ -106,8 +112,29 @@ The optional HLA environment installs MHCflurry through conda/bioconda. It does
 not install NetMHCpan. NetMHCpan is a DTU standalone tool and should be manually
 downloaded/installed only after accepting the appropriate license. In configs,
 `HLA_BINDING_TOOL=auto` tries NetMHCpan first and then MHCflurry. If neither is
-available it stops; the built-in `simple` mode must be selected explicitly and
-is only a smoke test.
+available, `RUN_HLA_BINDING=auto` skips binding and `true` stops. The built-in
+`simple` mode must be selected explicitly and is only a smoke test.
+
+HLA*LA software does not bundle its graph. After downloading
+`PRG_MHC_GRCh38_withIMGT.tar.gz`, prepare it with:
+
+```bash
+bash scripts/prepare_hlala_graph.sh \
+  --archive /path/to/PRG_MHC_GRCh38_withIMGT.tar.gz \
+  --reference-dir /PUBLIC/gomics/guofenghua/reference_data \
+  --env-prefix /PUBLIC/gomics/guofenghua/envs/wes/wes_hla_typing_env
+```
+
+The prepared directory is:
+
+```text
+/PUBLIC/gomics/guofenghua/reference_data/hla/PRG_MHC_GRCh38_withIMGT
+```
+
+The archive is approximately 2.3 GB and graph preparation may require about
+40 GB RAM. The generated paired project types HLA from the normal BAM and feeds
+derived two-field HLA-A/B/C alleles into binding prediction while preserving
+the full HLA*LA G-group output.
 
 MHCflurry separates the software package and prediction models. After creating
 the HLA environment, fetch the class-I presentation models once:

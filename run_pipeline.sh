@@ -46,7 +46,7 @@ source "${CONFIG_FILE}"
 source "${PROJECT_DIR}/scripts/utils.sh"
 
 PIPELINE_START_TIME=$(date +%s)
-STEP_ORDER="1 2 3 4 5 5b 5c 6 7 7b 7c 7d 8 9 10 11 12 13"
+STEP_ORDER="1 2 3 4 5 5b 5c 5d 6 7 7b 7c 7d 8 9 10 11 12 13"
 
 step_script() {
     case "$1" in
@@ -57,6 +57,7 @@ step_script() {
         5) echo "05_mark_duplicates.sh" ;;
         5b) echo "05b_post_align_qc.sh" ;;
         5c) echo "05c_bqsr.sh" ;;
+        5d) echo "05d_hla_typing.sh" ;;
         6) echo "06_variant_calling.sh" ;;
         7) echo "07_variant_filter.sh" ;;
         7b) echo "07b_snpeff.sh" ;;
@@ -81,6 +82,7 @@ step_name() {
         5) echo "标记PCR重复" ;;
         5b) echo "比对后QC统计 (Picard/Samtools)" ;;
         5c) echo "碱基质量重校准 (BQSR)" ;;
+        5d) echo "HLA*LA高分辨率HLA分型" ;;
         6) echo "变异检测 (GATK HC/Mutect2)" ;;
         7) echo "变异过滤" ;;
         7b) echo "SnpEff 功能注释" ;;
@@ -257,6 +259,10 @@ show_status() {
     echo ""
 
     case "${step_id}" in
+        5d)
+            show_file_status "HLA typing" "${DIR_HLA_TYPING}/${SAMPLE_ID}_hla_typing.tsv"
+            show_file_status "Binding alleles" "${DIR_HLA_TYPING}/${SAMPLE_ID}_hla_binding_alleles.txt"
+            ;;
         6)
             show_file_status "HC raw VCF" "${DIR_VARIANTS}/${SAMPLE_ID}.raw.vcf.gz"
             show_file_status "Mutect2 raw" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.raw.vcf.gz"
@@ -266,6 +272,9 @@ show_status() {
             show_file_status "HC PASS VCF" "${DIR_VARIANTS}/${SAMPLE_ID}.pass.vcf.gz"
             show_file_status "Mutect2 filtered" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.filtered.vcf.gz"
             show_file_status "Mutect2 PASS" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.pass.vcf.gz"
+            show_file_status "Orientation model" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.read-orientation-model.tar.gz"
+            show_file_status "Contamination" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.contamination.table"
+            show_file_status "Tumor segments" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.segments.table"
             ;;
         7c)
             show_file_status "VEP VCF" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
@@ -280,6 +289,12 @@ show_status() {
             show_file_status "MSI result" "${DIR_MSI}/${SAMPLE_ID}_msi_result.txt"
             show_file_status "MSI summary" "${DIR_MSI}/${SAMPLE_ID}_msi_summary.txt"
             ;;
+        12)
+            show_file_status "TMB report" "${DIR_TMB}/${SAMPLE_ID}_tmb_result.txt"
+            show_file_status "TMB accepted" "${DIR_TMB}/${SAMPLE_ID}_tmb_accepted_variants.tsv"
+            show_file_status "TMB rejected" "${DIR_TMB}/${SAMPLE_ID}_tmb_rejected_variants.tsv"
+            show_file_status "TMB JSON" "${DIR_TMB}/${SAMPLE_ID}_tmb_summary.json"
+            ;;
         7d)
             show_file_status "neo FASTA" "${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_peptides.fa"
             show_file_status "neo manifest" "${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_manifest.tsv"
@@ -287,17 +302,19 @@ show_status() {
             ;;
         all)
             show_file_status "dedup BAM" "${DIR_ALIGNED}/${SAMPLE_ID}.dedup.bam"
+            show_file_status "HLA typing" "${DIR_HLA_TYPING}/${SAMPLE_ID}_hla_typing.tsv"
             show_file_status "PASS VCF" "${DIR_VARIANTS}/${SAMPLE_ID}.pass.vcf.gz"
             show_file_status "Mutect2 PASS" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.pass.vcf.gz"
+            show_file_status "Contamination" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.contamination.table"
             show_file_status "VEP VCF" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
             show_file_status "neo FASTA" "${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_peptides.fa"
             show_file_status "CNV call" "${DIR_CNV}/${SAMPLE_ID}.call.cns"
             show_file_status "MSI summary" "${DIR_MSI}/${SAMPLE_ID}_msi_summary.txt"
             show_file_status "TMB" "${DIR_TMB}/${SAMPLE_ID}_tmb_result.txt"
-            show_file_status "summary" "${DIR_SUMMARY}/${SAMPLE_ID}_final_summary.txt"
+            show_file_status "summary" "${DIR_SUMMARY}/${SAMPLE_ID}_final_report.txt"
             ;;
         *)
-            log_warn "目前 status 内置 all、6、7、7c、7d、8、9；步骤 ${step_id} 可直接检查对应结果目录"
+            log_warn "目前 status 内置 all、5d、6、7、7c、7d、8、9、12；步骤 ${step_id} 可直接检查对应结果目录"
             ;;
     esac
 }

@@ -59,7 +59,7 @@ main() {
         return 0
     fi
 
-    if [ "${RUN_HLA_BINDING:-false}" != true ]; then
+    if [ "${RUN_HLA_BINDING:-false}" = false ]; then
         log_info "HLA结合预测未启用，候选肽FASTA已生成: ${output_fasta}"
         log_info "候选肽按mer拆分目录: ${fasta_dir}"
         log_info "突变蛋白明细表: ${protein_table}"
@@ -68,18 +68,36 @@ main() {
         return 0
     fi
 
-    if [ -z "${HLA_ALLELES:-}" ]; then
-        log_warn "RUN_HLA_BINDING=true 但 HLA_ALLELES 为空，跳过HLA结合预测"
+    local resolved_hla_alleles="${HLA_ALLELES:-}"
+    local typing_alleles_file="${HLA_TYPING_ALLELES_FILE:-${DIR_HLA_TYPING:-${RESULT_DIR}/hla_typing}/${SAMPLE_ID}_hla_binding_alleles.txt}"
+    if [ -z "${resolved_hla_alleles}" ] && [ -s "${typing_alleles_file}" ]; then
+        resolved_hla_alleles=$(tr -d '[:space:]' < "${typing_alleles_file}")
+        log_info "使用自动HLA分型的binding等位基因: ${typing_alleles_file}"
+    fi
+
+    if [ -z "${resolved_hla_alleles}" ]; then
+        if [ "${RUN_HLA_BINDING:-false}" = true ]; then
+            log_error "RUN_HLA_BINDING=true 但未配置HLA_ALLELES且无自动分型结果"
+            return 1
+        fi
+        log_warn "没有可用HLA等位基因，自动跳过HLA结合预测"
+        return 0
+    fi
+
+    if [ "${RUN_HLA_BINDING:-false}" = auto ] && \
+       ! command -v "${TOOL_NETMHCPAN:-netMHCpan}" >/dev/null 2>&1 && \
+       ! command -v "${TOOL_MHCFLURRY:-mhcflurry-predict}" >/dev/null 2>&1; then
+        log_warn "未安装netMHCpan或MHCflurry，自动跳过HLA结合预测"
         return 0
     fi
 
     local allele_file="${DIR_NEOANTIGEN}/${SAMPLE_ID}_hla_alleles.txt"
-    tr ',' '\n' <<< "${HLA_ALLELES}" > "${allele_file}"
+    tr ',' '\n' <<< "${resolved_hla_alleles}" > "${allele_file}"
 
     run_cmd "HLA结合预测 (${HLA_BINDING_TOOL:-auto})" \
         "${TOOL_PYTHON:-python3}" "${SCRIPT_DIR}/hla_binding_predict.py" \
         --peptides "${output_fasta}" \
-        --alleles "${HLA_ALLELES}" \
+        --alleles "${resolved_hla_alleles}" \
         --output "${binding_out}" \
         --tool "${HLA_BINDING_TOOL:-auto}" \
         --netmhcpan-bin "${TOOL_NETMHCPAN:-netMHCpan}" \

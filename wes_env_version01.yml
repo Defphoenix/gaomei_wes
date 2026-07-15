@@ -23,6 +23,7 @@ dependencies:
 
   # Variant calling and annotation
   - gatk4
+  - picard
   - snpeff
 
   # Coverage, MSI, reporting, compression

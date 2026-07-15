@@ -1,118 +1,87 @@
-# WES Pipeline Software and Database Inventory
+# WES 软件与数据库清单
 
-Generated for local workspace: `/Users/mac/Documents/wes/test_run_workspace`
+本清单描述 GitHub 版本的依赖边界，不记录某一台电脑的绝对路径。安装后真实版本
+保存在 `ENV_ROOT/manifests/*.packages.txt`，可用于服务器复现和审计。
 
-## Local Status Summary
+## 自动安装的软件
 
-| Category | Item | Current local status | Suggested action |
-|---|---|---:|---|
-| Core reference | GRCh38 FASTA + `.fai` + BWA index + `.dict` | Installed at `/Users/mac/Documents/wes/reference_data/hg38` | Keep |
-| Germline known sites | dbSNP 146 hg38 + index | Installed | Keep |
-| Germline known indels | Mills and 1000G gold standard indels + index | Installed | Keep |
-| Germline known SNPs | 1000G phase1 high-confidence SNPs + index | Installed | Keep |
-| VEP cache | homo_sapiens VEP 115 GRCh38 cache | Extracted at `/Users/mac/Documents/wes/reference_data/vep_cache/homo_sapiens/115_GRCh38` | Keep |
-| VEP executable | `vep` | Installed at `/Users/mac/Documents/wes/.conda_envs/wes_vep_env/bin/vep` via wrapper `scripts/run_vep_env.sh` | Keep; tested with step 7c |
-| ANNOVAR software | `table_annovar.pl`, `annotate_variation.pl` | Missing | Manual licensed download |
-| ANNOVAR databases | `humandb/hg38_*` | Missing | Download after ANNOVAR installed |
-| SnpEff executable | `snpEff` / `SnpSift` | Installed in `/Users/mac/anaconda3/envs/big_wes_pipeline_env` | Keep |
-| SnpEff database | `GRCh38.105` database | Not found under `/Users/mac/Documents/wes/reference_data` | Download only if SnpEff path is used |
-| CNVkit | `cnvkit.py` | Missing | Optional; pipeline has mosdepth fallback |
-| MSI | `msisensor-pro` | Installed | Provide list/baseline for formal MSI |
-| HLA binding | `netMHCpan`, `mhcflurry-predict` | Missing | NetMHCpan manual DTU install, or conda install MHCflurry |
-| Neoantigen protein FASTA | Ensembl/GENCODE protein FASTA | Missing | Download if neoantigen module is used |
+| 环境 | 软件 | 用途 |
+|---|---|---|
+| 核心 | Python 3.10、OpenJDK 17 | 脚本与 GATK 运行时 |
+| 核心 | FastQC、fastp、Seqtk、Trimmomatic | FASTQ QC、修剪和抽样 |
+| 核心 | BWA、Samtools、BCFtools、HTSlib、BEDtools | 比对及 BAM/VCF/BED 操作 |
+| 核心 | GATK4、Picard | 胚系/体细胞检测、BQSR、重复标记 |
+| 核心 | SnpEff/SnpSift | 可选功能注释；数据库另行准备 |
+| 核心 | mosdepth、MSIsensor-pro、MultiQC | 深度、MSI 与 QC 汇总 |
+| VEP | Ensembl VEP 115.2 | 离线转录本和蛋白后果注释 |
+| HLA，可选 | MHCflurry | HLA-I binding；模型另行下载 |
+| CNV，可选 | CNVkit 0.9.12 | 正式 CNV 主工具 |
+| SV，可选、Linux | Manta 1.6.0 | 兼容 SV 模块；上游项目已归档 |
 
-## Software Table
+推荐安装：
 
-| Priority | Tool | Purpose | Current status | Install route | Notes |
-|---:|---|---|---:|---|---|
-| P0 | FastQC | raw read QC | Installed | conda/bioconda | Core QC |
-| P0 | fastp | trimming | Installed | conda/bioconda | Used by step 2 |
-| P0 | BWA | alignment | Installed | conda/bioconda | Used by step 3 |
-| P0 | Samtools | BAM/FASTA operations | Installed | conda/bioconda | Core |
-| P0 | GATK4 | variant calling/BQSR/filtering | Installed | conda/bioconda | Core |
-| P0 | BCFtools/HTSlib | VCF operations/indexing | Installed | conda/bioconda | Core |
-| P0 | BEDtools | BED interval operations | Installed | conda/bioconda | Core |
-| P0 | Picard | duplicate marking/QC | Installed | conda/bioconda | Core |
-| P1 | VEP 115 | functional annotation | Installed and tested | `wes_vep_env.yml` | Cache already present |
-| P1 | ANNOVAR | functional/population/clinical annotation | Missing | Manual official download | Requires registration/license |
-| P1 | SnpEff/SnpSift | functional annotation | Installed executable | conda/bioconda | DB still needed |
-| P1 | MultiQC | QC aggregation | Installed | pip/conda | Already in env |
-| P1 | mosdepth | coverage and CNV fallback | Installed | conda/bioconda | Used by CNV fallback |
-| P1 | MSIsensor-pro | MSI | Installed | conda/bioconda | Formal run needs microsatellite list/baseline |
-| P2 | CNVkit | CNV | Missing | conda/bioconda | Optional; preferred for formal CNV |
-| P2 | Manta | SV | Missing | conda/bioconda or separate env | Optional SV module |
-| P2 | MHCflurry | HLA binding | Missing | `wes_hla_env.yml` / bioconda | Conda-installable option for binding prediction |
-| P2 | netMHCpan | HLA binding | Missing | Manual DTU standalone download | Widely used option, license/manual download required |
-| P2 | OptiType / arcasHLA | HLA typing | Missing | separate env | Needed if HLA alleles are not provided |
+```bash
+bash scripts/create_conda_envs.sh \
+  --env-root /PUBLIC/gomics/guofenghua/envs/wes \
+  --mamba-bin mamba \
+  --with-hla \
+  --with-cnv
+```
 
-## Database Table
+Linux 服务器确实需要 Manta 时增加 `--with-sv`。首次安装 MHCflurry 模型可增加
+`--fetch-hla-models`，但该步骤会联网并下载额外数据。
 
-| Priority | Database/resource | Module | Current status | Approx size | Download / preparation route | Notes |
-|---:|---|---|---:|---:|---|---|
-| P0 | GRCh38 reference FASTA | alignment/calling | Installed | ~3-4 GB plus indexes | Already local | Keep under `reference_data/hg38` |
-| P0 | dbSNP hg38 VCF | BQSR/annotation | Installed | several GB | Already local | `dbsnp_146.hg38.vcf.gz` |
-| P0 | Mills indels hg38 VCF | BQSR | Installed | small-medium | Already local | Used by BQSR |
-| P0 | 1000G high-confidence SNPs | BQSR | Installed | medium | Already local | Optional known site |
-| P1 | VEP cache 115 GRCh38 | VEP | Installed/extracted | 24 GB extracted | Already local | Cache metadata includes COSMIC 101, dbSNP 156, ClinVar 202502, 1000G phase3, gnomAD v4.1 |
-| P1 | VEP plugins data: dbNSFP | VEP | Missing | large, often 30-100+ GB | manual/plugin-specific | Supports SIFT/PolyPhen-like aggregated scores, REVEL etc. |
-| P1 | VEP plugins data: CADD | VEP | Missing | large | CADD release files | Optional, large |
-| P1 | VEP plugins data: REVEL | VEP | Missing | medium-large | REVEL release | Optional |
-| P1 | ANNOVAR humandb `refGene` | ANNOVAR | Missing | small | `annotate_variation.pl -buildver hg38 -downdb refGene humandb/` | Basic gene annotation |
-| P1 | ANNOVAR humandb `cytoBand` | ANNOVAR | Missing | small | ANNOVAR download | Cytoband annotation |
-| P1 | ANNOVAR humandb `avsnp150/151` | ANNOVAR | Missing | medium | ANNOVAR download | dbSNP ID annotation |
-| P1 | ANNOVAR humandb `clinvar_*` | ANNOVAR | Missing | medium | ANNOVAR download | Clinical annotation |
-| P1 | ANNOVAR humandb `gnomad*` | ANNOVAR | Missing | large | ANNOVAR download | Population AF filtering |
-| P1 | ANNOVAR humandb `dbnsfp*` | ANNOVAR | Missing | very large | ANNOVAR download | Functional prediction scores |
-| P1 | SnpEff GRCh38 database | SnpEff | Missing | several GB | `snpEff download GRCh38.105` | Matches current `SNPEFF_DB=GRCh38.105`; alternatives include `GRCh38.p14`, MANE, and UCSC `hg38` |
-| P1 | ClinVar VCF hg38 | SnpSift/bcftools annotate | Missing standalone | medium | NCBI ClinVar VCF | Useful even without ANNOVAR |
-| P1 | COSMIC coding/noncoding | cancer annotation | Missing | licensed | COSMIC account/license | Cannot auto-download without credentials |
-| P1 | MSIsensor-pro microsatellite list | MSI | Missing | small-medium | `msisensor-pro scan` or prebuilt list | Formal MSI needs this |
-| P1 | MSIsensor-pro baseline | MSI tumor-only | Missing | medium | build/download baseline | Tumor-only formal calling improves with baseline |
-| P1 | Ensembl/GENCODE protein FASTA | neoantigen | Installed locally if `reference_data/protein/protein.fa` exists | small-medium | Ensembl/GENCODE | Needed to reconstruct peptide context; ID should match VEP ENSP/Feature |
-| P2 | Panel of Normals | Mutect2/CNV/MSI | Missing | project-specific | build from normals | Strongly recommended for somatic WES |
-| P2 | CNVkit pooled reference `.cnn` | CNVkit | Missing | project-specific | build from normals | Formal CNV improves with matched normals |
-| P2 | target capture BED | WES coverage/CNV | Using test BED only | small | vendor kit BED | Required for real WES |
+## 不能自动下载的软件或数据
 
-## Recommended Local Directory Layout
+| 项目 | 原因 | 流程中的位置 |
+|---|---|---|
+| NetMHCpan | DTU 许可和申请流程 | 可替代 MHCflurry 做 binding |
+| ANNOVAR 与 humandb | 注册/许可要求 | 可选并行注释；新抗原表可合并其结果 |
+| COSMIC | 账户和许可要求 | 肿瘤知识注释 |
+| 部分 CADD/dbNSFP/REVEL 数据 | 许可、版本和体积差异 | VEP 插件 |
+
+VEP cache 本身不等于自动拥有所有插件数据；`--everything` 也不会凭空提供
+CADD/REVEL。需要这些评分时，应明确下载对应版本并配置插件参数。
+
+## 参考数据
+
+| 优先级 | 数据 | 用途 | 说明 |
+|---:|---|---|---|
+| P0 | GRCh38 FASTA、FAI、DICT、BWA index | 全流程 | contig 命名必须与 BED/VCF 一致 |
+| P0 | 捕获试剂盒 BED | WES 调用、覆盖度、CNV、TMB | 使用厂商对应版本，不使用通用测试 BED |
+| P0 | VEP 115 GRCh38 cache | VEP | 目录应为 `homo_sapiens/115_GRCh38` |
+| P0 | Ensembl 115 `pep.all` FASTA | 新抗原 | 蛋白 ID 需匹配 VEP ENSP/Feature |
+| P1 | dbSNP、Mills、1000G known-sites | BQSR | 全部使用同一 GRCh38 build |
+| P1 | gnomAD AF-only resource | Mutect2 | 用于 germline prior 和污染流程 |
+| P1 | Panel of Normals | Mutect2 | 同平台、同试剂盒 normal 构建 |
+| P1 | CNVkit normal reference | CNV | 同批次 normal 建立并版本化 |
+| P1 | MSIsensor site list/baseline | MSI | 应按参考版本、BED 和平台校准 |
+| P2 | ClinVar VCF | 临床注释 | 可通过 VEP custom 或其他注释器接入 |
+| P2 | SnpEff GRCh38 database | SnpEff | 只有启用 SnpEff 时需要 |
+| P2 | HLA typing database | HLA 分型 | 当前尚未接入自动 HLA typing |
+
+## 推荐目录
 
 ```text
-/Users/mac/Documents/wes/reference_data/
+reference_data/
   hg38/
     Homo_sapiens_assembly38.fasta
     Homo_sapiens_assembly38.fasta.fai
     Homo_sapiens_assembly38.dict
   known_sites/
-    dbsnp_146.hg38.vcf.gz
-    Mills_and_1000G_gold_standard.indels.hg38.vcf.gz
-    1000G_phase1.snps.high_confidence.hg38.vcf.gz
-  vep_cache/
-    homo_sapiens/115_GRCh38/
-  annovar/
-    annovar/
-    humandb/
-  snpeff/
-    data/
-  clinvar/
-  cosmic/
-  msisensor/
-  protein/
-  hla/
+  mutect2/
+    gnomad.af-only.vcf.gz
+    panel_of_normals.vcf.gz
+  vep_cache/homo_sapiens/115_GRCh38/
+  protein/protein.fa
+  cnvkit/reference.cnn
+  msisensor/hg38.capture.list
+  capture_targets.bed
 ```
 
-## Suggested Download Order
+## 重要说明
 
-1. Download SnpEff GRCh38 database if we keep SnpEff as a parallel annotation path.
-2. Download/install ANNOVAR manually, then populate `annovar/humandb`.
-3. Add ClinVar/gnomAD/dbNSFP either through ANNOVAR humandb or VEP plugins; avoid duplicating huge databases unless needed.
-4. Prepare MSIsensor-pro list/baseline.
-5. Add HLA binding tool: MHCflurry via conda for open installation; NetMHCpan only if manually licensed/downloaded from DTU.
-6. Optional: CNVkit and Manta in separate optional environments.
-
-## Licensing / Manual-download Items
-
-| Item | Reason |
-|---|---|
-| ANNOVAR | Official download requires registration and license acceptance. |
-| COSMIC | Requires COSMIC account/license. |
-| netMHCpan | Requires DTU academic/commercial license flow. |
-| Some CADD/dbNSFP/REVEL resources | Large files and may require accepting source-specific terms. |
+- MHCflurry/NetMHCpan 做的是 binding prediction，不等于 HLA typing。
+- mosdepth 深度比例是 CNV 连通性 fallback，不应替代校准后的 CNVkit 结果。
+- 缺少 MSI 位点表或基线时只能产生测试状态，不能作为正式 MSI 结论。
+- 数据库版本、下载日期、校验值和许可信息都应进入项目 provenance。

@@ -6,8 +6,8 @@
 #       VEP提供更丰富的功能注释，包括:
 #       - 基因/转录本/蛋白质影响
 #       - SIFT/PolyPhen预测
-#       - CADD/REVEL评分
-#       - 已有数据库交叉引用 (ClinVar, COSMIC, gnomAD等)
+#       - SIFT/PolyPhen等cache内置预测
+#       - 已有数据库交叉引用；CADD/REVEL等需要单独插件数据
 #
 # 输入: 过滤后的VCF文件
 # 输出: 注释VCF + TSV表格 + HTML报告
@@ -167,7 +167,6 @@ main() {
         --everything \
         --no_progress \
         --check_existing \
-        --clinvar \
         --pubmed \
         --per_gene \
         --symbol \
@@ -178,6 +177,7 @@ main() {
         --hgvs \
         --hgvsg \
         --variant_class \
+        --warning_file "${vep_warnings}" \
         ${VEP_EXTRA_PARAMS} \
         ${plugin_params} || \
     {

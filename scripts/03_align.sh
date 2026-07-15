@@ -52,6 +52,18 @@ main() {
 
     # 输出SAM文件路径
     local output_sam="${DIR_ALIGNED}/${SAMPLE_ID}.sam"
+    local sorted_bam="${DIR_ALIGNED}/${SAMPLE_ID}.sorted.bam"
+    local dedup_bam="${DIR_ALIGNED}/${SAMPLE_ID}.dedup.bam"
+
+    if { [ -s "${dedup_bam}" ] && [ -f "${dedup_bam}.bai" ]; } || \
+       { [ -s "${sorted_bam}" ] && [ -f "${sorted_bam}.bai" ]; }; then
+        log_warn "下游BAM和索引已存在，跳过重复比对"
+        return 0
+    fi
+    if [ -s "${output_sam}" ]; then
+        log_warn "SAM已存在，跳过重复比对"
+        return 0
+    fi
 
     # BWA-MEM 比对
     # -M: 将较短split hits标记为secondary (Picard兼容)

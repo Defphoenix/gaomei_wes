@@ -1,13 +1,43 @@
 # WES Pipeline Server Deployment and Mixed-sample Test
 
-This document describes how to copy the project to a server, create conda
-environments, generate mixed FASTQ benchmark data, and create runnable sample
-configs.
+This document describes how to deploy the GitHub version on a server, create
+mamba/conda environments, generate mixed FASTQ benchmark data, and create
+runnable sample configs.
 
-## 1. Files To Upload
+## 1. Get Or Update The Code
 
-Upload the whole `test_run_workspace` folder to the server. Runtime outputs can
-be omitted:
+Recommended server workflow:
+
+```bash
+mkdir -p /PUBLIC/gomics/guofenghua/project
+cd /PUBLIC/gomics/guofenghua/project
+
+git clone git@github.com:Defphoenix/gaomei_wes.git wes_pipeline
+cd wes_pipeline
+```
+
+If the server does not have GitHub SSH configured, use HTTPS instead:
+
+```bash
+git clone https://github.com/Defphoenix/gaomei_wes.git wes_pipeline
+cd wes_pipeline
+```
+
+After local changes are pushed to GitHub, update the server copy with:
+
+```bash
+cd /PUBLIC/gomics/guofenghua/project/wes_pipeline
+git pull
+bash scripts/create_conda_envs.sh \
+  --env-root /PUBLIC/gomics/guofenghua/envs/wes \
+  --mamba-bin mamba \
+  --with-hla \
+  --with-cnv \
+  --update-existing
+```
+
+If you cannot use GitHub on the server, rsync is still possible, but exclude
+runtime outputs:
 
 ```bash
 rsync -a \
@@ -19,7 +49,7 @@ rsync -a \
   user@server:/PUBLIC/gomics/guofenghua/project/wes_pipeline/
 ```
 
-The repository already contains one tiny paired FASTQ for display/smoke tests:
+The repository contains one tiny paired FASTQ for display/smoke tests:
 
 ```text
 testdata/variant_sim/sim100_R1.fastq.gz
@@ -36,24 +66,30 @@ cd /PUBLIC/gomics/guofenghua/project/wes_pipeline
 # Prefer mamba. Use --mamba-bin micromamba if that is what the server provides.
 bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
-  --mamba-bin mamba
+  --mamba-bin mamba \
+  --with-hla \
+  --with-cnv
 ```
 
 If your server has global channels such as `r` in `.condarc`, keep the default
 `--override-channels --channel-priority flexible` behavior. It prevents unrelated
 global channels from entering the solve.
 
-`picard` is optional in this pipeline and is not installed in the main yml to
-avoid pulling large R/ICU dependency chains on shared servers. If Picard is not
-available, duplicate marking falls back to `samtools markdup`.
+Picard is installed in the core environment. CNVkit is isolated in
+`wes_cnv_env` because its R/Python dependencies are much larger. Manta is also
+isolated and is only created with `--with-sv`; use it on Linux only. The
+installer writes exact resolved versions under `ENV_ROOT/manifests/`.
 
-Optional HLA/MHCflurry environment:
+If a previous failed environment directory exists, either remove it manually
+after confirming the path, or let the installer clean only incomplete prefix
+directories:
 
 ```bash
 bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
-  --with-hla
+  --with-hla \
+  --clean-incomplete
 ```
 
 Then use these paths in generated configs:
@@ -62,13 +98,16 @@ Then use these paths in generated configs:
 MAIN_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/big_wes_pipeline_env
 VEP_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_vep_env
 HLA_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_hla_env
+CNV_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_cnv_env
+SV_ENV_PREFIX=/PUBLIC/gomics/guofenghua/envs/wes/wes_sv_env
 ```
 
 The optional HLA environment installs MHCflurry through conda/bioconda. It does
 not install NetMHCpan. NetMHCpan is a DTU standalone tool and should be manually
 downloaded/installed only after accepting the appropriate license. In configs,
-`HLA_BINDING_TOOL=auto` will try NetMHCpan first, then MHCflurry, and finally
-the built-in `simple` smoke-test mode.
+`HLA_BINDING_TOOL=auto` tries NetMHCpan first and then MHCflurry. If neither is
+available it stops; the built-in `simple` mode must be selected explicitly and
+is only a smoke test.
 
 MHCflurry separates the software package and prediction models. After creating
 the HLA environment, fetch the class-I presentation models once:
@@ -188,10 +227,11 @@ mix_HG002_HG003_5pct/
   run_sample.sh             one-command runner
 ```
 
-Run it:
+Run it through the stable project-root entry point:
 
 ```bash
-bash /PUBLIC/gomics/guofenghua/project/wes_runs/mix_HG002_HG003_5pct/run_mix_HG002_HG003_5pct.sh
+cd /PUBLIC/gomics/guofenghua/project/wes_runs/mix_HG002_HG003_5pct
+bash run_pipeline.sh
 ```
 
 Single-step debug:
@@ -226,10 +266,11 @@ bash scripts/create_wes_project.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes
 ```
 
-Run the paired project:
+Run the paired project through the stable project-root entry point:
 
 ```bash
-bash /PUBLIC/gomics/guofenghua/project/wes_runs/TUMOR01_vs_NORMAL01/run_TUMOR01_vs_NORMAL01.sh
+cd /PUBLIC/gomics/guofenghua/project/wes_runs/TUMOR01_vs_NORMAL01
+bash run_pipeline.sh
 ```
 
 Important outputs:

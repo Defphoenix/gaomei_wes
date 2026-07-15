@@ -1,6 +1,12 @@
-# 突变分析流程 (Mutation Analysis Pipeline)
+# WES 肿瘤-正常配对与单样本分析流程
 
-基于 Nextflow 突变分析流程思路，使用 Shell 脚本本地化实现的 **完整** WES/WGS 突变分析流程。
+**中文** | [English](README_EN.md)
+
+这是一个以 Shell/Python 实现、可在服务器直接部署的 WES 分析项目，支持单样本
+胚系检测和肿瘤-正常配对体细胞检测，并保留单步调试入口。当前版本适合研发、
+benchmark 和流程验证；正式临床或工业交付前仍需完成 PoN/污染校正、CNV/MSI
+基线、HLA 分型、临床知识库和队列级验证。详细审计见
+[流程审计与更新路线](docs/pipeline_audit_zh.md)。
 
 ## 流程总览
 
@@ -23,8 +29,8 @@ FASTQ → FastQC → 修剪 → BWA比对 → 排序索引 → 标记重复 → 
 | 5c | `05c_bqsr.sh` | GATK BQSR | 校准 | 碱基质量分数重校准 |
 | 6 | `06_variant_calling.sh` | GATK HC / Mutect2 | 变异 | SNV/InDel检测 |
 | 7 | `07_variant_filter.sh` | GATK, BCFtools | 变异 | 变异质量过滤 |
-| 7b | `07b_snpeff.sh` | SnpEff, SnpSift | 注释 | 功能注释 + ClinVar/COSMIC |
-| 7c | `07c_vep.sh` | Ensembl VEP | 注释 | SIFT/PolyPhen/CADD/REVEL/gnomAD |
+| 7b | `07b_snpeff.sh` | SnpEff, SnpSift | 注释 | 功能注释；可选叠加ClinVar/COSMIC |
+| 7c | `07c_vep.sh` | Ensembl VEP | 注释 | 转录本后果、SIFT/PolyPhen、已知变异；CADD/REVEL需插件数据 |
 | 7d | `07d_neoantigen.sh` | Python, MHCflurry/NetMHCpan(可选) | 新抗原 | 从VEP注释VCF生成候选肽FASTA和HLA结合预测 |
 | 8 | `08_cnv.sh` | CNVkit / mosdepth | CNV | 拷贝数变异检测，CNVkit缺失时使用深度比例fallback |
 | 9 | `09_msi.sh` | MSIsensor-pro | MSI | 微卫星不稳定性检测 |
@@ -83,57 +89,112 @@ mutation_pipeline/
 
 ## 快速开始
 
-服务器部署、混样 benchmark、项目自动生成请看:
+推荐服务器使用方式是：`git clone` 本仓库，使用 `mamba` 按 prefix 创建环境，
+之后所有项目都引用同一套环境。服务器部署、混样 benchmark、项目自动生成请看:
 
 ```text
 docs/server_deployment_and_mix_test.md
 ```
 
-### 1. 安装工具
+### 1. 获取代码
 
 ```bash
-# 使用conda一键安装核心工具
-conda create -n mutation_pipe python=3.9
-conda activate mutation_pipe
-conda install -c bioconda \
-    fastqc fastp bwa samtools picard gatk4 \
-    bcftools bedtools multiqc mosdepth \
-    snpeff ensembl-vep cnvkit msisensor2 \
-    qualimap
+git clone git@github.com:Defphoenix/gaomei_wes.git
+cd gaomei_wes
 ```
 
-### 2. 修改配置
-
-编辑 `config.sh`，至少修改以下内容：
+如果服务器没有配置 GitHub SSH，也可以使用 HTTPS:
 
 ```bash
-# 样本信息
-SAMPLE_ID="sample01"
-SAMPLE_TYPE="tumor"          # tumor / normal / germline
-
-# 参考基因组 (必须!)
-REFERENCE_GENOME="/path/to/hg38.fa"
-
-# 原始数据
-RAW_DATA_DIR="/path/to/fastq"
-
-# 注释数据库
-SNPEFF_DB="GRCh38.105"
-SNPEFF_DATA_DIR="/path/to/snpeff/data"
-VEP_CACHE_DIR="/path/to/vep/cache"
+git clone https://github.com/Defphoenix/gaomei_wes.git
+cd gaomei_wes
 ```
 
-### 3. 放入数据并运行
+后续本地更新后，服务器只需要在仓库目录执行：
 
 ```bash
-# 放入FASTQ
-cp sample01_R1.fastq.gz data/
-cp sample01_R2.fastq.gz data/
+git pull
+bash scripts/create_conda_envs.sh \
+  --env-root /PUBLIC/gomics/guofenghua/envs/wes \
+  --mamba-bin mamba \
+  --with-hla \
+  --with-cnv \
+  --update-existing
+```
 
-# 检查环境
-bash run_pipeline.sh check
+### 2. 使用 mamba 创建环境
 
-# 运行完整流程
+```bash
+bash scripts/create_conda_envs.sh \
+  --env-root /PUBLIC/gomics/guofenghua/envs/wes \
+  --mamba-bin mamba \
+  --with-hla \
+  --with-cnv
+```
+
+上面的推荐命令会创建四个 prefix 环境:
+
+```bash
+big_wes_pipeline_env   # 主流程: fastqc/fastp/bwa/samtools/gatk/bcftools/snpeff/mosdepth/msisensor-pro
+wes_vep_env            # VEP专用环境
+wes_hla_env            # MHCflurry HLA结合预测环境，可选
+wes_cnv_env            # CNVkit正式CNV分析环境，可选
+```
+
+Manta 为归档的旧工具，Linux 服务器需要时再单独加 `--with-sv`。安装脚本会把
+实际解析到的精确包版本写入 `ENV_ROOT/manifests/`，因此 YML 保存安装需求，
+manifest 保存本次服务器安装的真实版本和 build。
+
+创建完成后 source 环境辅助文件:
+
+```bash
+source /PUBLIC/gomics/guofenghua/envs/wes/env.sh
+gatk --version
+vep --help
+```
+
+如果需要正式使用 MHCflurry 预测 HLA binding，首次还需要下载模型:
+
+```bash
+mamba run -p /PUBLIC/gomics/guofenghua/envs/wes/wes_hla_env \
+  mhcflurry-downloads fetch models_class1_presentation
+```
+
+### 3. 创建项目并运行
+
+单样本:
+
+```bash
+bash scripts/create_wes_project.sh \
+  --mode single \
+  --fastq-source /path/to/sample_fastq_dir \
+  --out-dir /path/to/wes_runs/sample01 \
+  --sample-id sample01 \
+  --reference-dir /path/to/reference_data \
+  --reference-genome /path/to/reference_data/hg38/Homo_sapiens_assembly38.fasta \
+  --interval-bed /path/to/reference_data/capture_targets.bed \
+  --env-root /PUBLIC/gomics/guofenghua/envs/wes
+
+cd /path/to/wes_runs/sample01
+bash run_pipeline.sh
+```
+
+肿瘤-正常配对:
+
+```bash
+bash scripts/create_wes_project.sh \
+  --mode tumor-normal \
+  --tumor-fastq-source /path/to/tumor_fastq_dir \
+  --normal-fastq-source /path/to/normal_fastq_dir \
+  --out-dir /path/to/wes_runs/tumor01_vs_normal01 \
+  --tumor-id tumor01 \
+  --normal-id normal01 \
+  --reference-dir /path/to/reference_data \
+  --reference-genome /path/to/reference_data/hg38/Homo_sapiens_assembly38.fasta \
+  --interval-bed /path/to/reference_data/capture_targets.bed \
+  --env-root /PUBLIC/gomics/guofenghua/envs/wes
+
+cd /path/to/wes_runs/tumor01_vs_normal01
 bash run_pipeline.sh
 ```
 
@@ -155,8 +216,8 @@ bash run_pipeline.sh step 8       # 仅CNV分析
 # 从指定步骤开始
 bash run_pipeline.sh from 8       # 从CNV分析开始
 
-# 断点续跑 (修改config.sh中SKIP_XXX=true)
-bash run_pipeline.sh
+# 从失败步骤续跑
+bash run_pipeline.sh from 7c
 
 # 仅检查环境
 bash run_pipeline.sh dry-run
@@ -258,7 +319,7 @@ bash run_pipeline.sh check
 |------|------|------|
 | SnpEff | 功能注释 | `conda install -c bioconda snpeff` |
 | SnpSift | VCF过滤/注释 | 随SnpEff安装 |
-| VEP | 功能注释 | `conda install -c bioconda ensembl-vep` |
+| VEP | 功能注释 | 独立 `wes_vep_env.yml`，需要同版本离线 cache |
 | MHCflurry | HLA结合预测 | `conda install -c bioconda mhcflurry`; 首次使用需下载模型 |
 | netMHCpan | HLA结合预测 | DTU standalone，需按官方许可手动安装 |
 
@@ -268,7 +329,7 @@ bash run_pipeline.sh check
 |------|------|------|
 | CNVkit | CNV分析 | `conda install -c bioconda cnvkit` |
 | mosdepth | CNV fallback/覆盖度 | `conda install -c bioconda mosdepth` |
-| Manta | 结构变异 | `conda install -c bioconda manta` |
+| Manta | 结构变异 | 独立 `wes_sv_env.yml`；项目已归档，仅作兼容模块 |
 | MSIsensor-pro | MSI检测 | `conda install -c bioconda msisensor-pro` |
 | mosdepth | 覆盖度分析 | `conda install -c bioconda mosdepth` |
 | MultiQC | QC汇总 | `conda install -c bioconda multiqc` |
@@ -308,7 +369,8 @@ bash run_pipeline.sh check
 | MSI | `msi/*_msi_summary.txt` | MSI状态 |
 | 覆盖度 | `coverage/*_coverage_report.txt` | 覆盖度统计 |
 | TMB | `tmb/*_tmb_result.txt` | TMB值 |
-| 汇总 | `multiqc/*_report.html` | MultiQC报告 |
+| 汇总 | `summary/*_final_report.txt` | 中文文本综合报告 |
+| 汇总 | `multiqc/*_report.html` | MultiQC QC报告；不是完整临床解读报告 |
 
 ## 配置说明
 
@@ -373,7 +435,8 @@ TOOL_NETMHCPAN="netMHCpan"
      MHCflurry首次使用需运行: mhcflurry-downloads fetch models_class1_presentation
 
 说明:
-  simple模式只用于流程连通性测试，不作为正式binding预测。
+  auto模式找不到NetMHCpan/MHCflurry时会报错停止。
+  simple模式必须显式指定，只用于流程连通性测试，不作为正式binding预测。
 ```
 
 模拟测试:

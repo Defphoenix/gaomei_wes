@@ -1,0 +1,8 @@
+name: wes_cnv_env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - cnvkit=0.9.12
+

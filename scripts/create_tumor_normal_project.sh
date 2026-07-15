@@ -21,6 +21,8 @@ ENV_ROOT=""
 MAIN_ENV_PREFIX_OVERRIDE=""
 VEP_ENV_PREFIX_OVERRIDE=""
 HLA_ENV_PREFIX_OVERRIDE=""
+CNV_ENV_PREFIX_OVERRIDE=""
+SV_ENV_PREFIX_OVERRIDE=""
 INCLUDE_TESTDATA=true
 
 usage() {
@@ -45,6 +47,8 @@ Options:
   --main-env-prefix DIR       Full path to big_wes_pipeline_env. Overrides --env-root for main tools.
   --vep-env-prefix DIR        Full path to wes_vep_env. Overrides --env-root for VEP.
   --hla-env-prefix DIR        Full path to wes_hla_env. Overrides --env-root for HLA.
+  --cnv-env-prefix DIR        Full path to wes_cnv_env. Overrides --env-root for CNVkit.
+  --sv-env-prefix DIR         Full path to wes_sv_env. Overrides --env-root for Manta.
   --no-testdata               Do not copy bundled testdata/demo FASTQ.
   -h, --help                  Show this help.
 EOF
@@ -142,6 +146,7 @@ copy_pipeline_code() {
         cp "${SOURCE_PROJECT_DIR}/run_pipeline.sh" "${target_pipeline}/"
         cp "${SOURCE_PROJECT_DIR}/config.sh" "${target_pipeline}/"
         cp "${SOURCE_PROJECT_DIR}/README.md" "${target_pipeline}/"
+        [ ! -f "${SOURCE_PROJECT_DIR}/README_EN.md" ] || cp "${SOURCE_PROJECT_DIR}/README_EN.md" "${target_pipeline}/"
         cp "${SOURCE_PROJECT_DIR}"/*.yml "${target_pipeline}/"
         cp -R "${SOURCE_PROJECT_DIR}/scripts" "${target_pipeline}/"
         cp -R "${SOURCE_PROJECT_DIR}/docs" "${target_pipeline}/"
@@ -168,6 +173,8 @@ while [ $# -gt 0 ]; do
         --main-env-prefix) MAIN_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --vep-env-prefix) VEP_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --hla-env-prefix) HLA_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
+        --cnv-env-prefix) CNV_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
+        --sv-env-prefix) SV_ENV_PREFIX_OVERRIDE="$2"; shift 2 ;;
         --no-testdata) INCLUDE_TESTDATA=false; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
@@ -246,14 +253,20 @@ if [ -n "${ENV_ROOT}" ]; then
     MAIN_ENV_PREFIX="${ENV_ROOT}/big_wes_pipeline_env"
     VEP_ENV_PREFIX="${ENV_ROOT}/wes_vep_env"
     HLA_ENV_PREFIX="${ENV_ROOT}/wes_hla_env"
+    CNV_ENV_PREFIX="${ENV_ROOT}/wes_cnv_env"
+    SV_ENV_PREFIX="${ENV_ROOT}/wes_sv_env"
 else
     MAIN_ENV_PREFIX="${CONDA_BASE}/envs/big_wes_pipeline_env"
     VEP_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_vep_env"
     HLA_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_hla_env"
+    CNV_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_cnv_env"
+    SV_ENV_PREFIX="${OUT_DIR}/.conda_envs/wes_sv_env"
 fi
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX_OVERRIDE:-${MAIN_ENV_PREFIX}}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX_OVERRIDE:-${VEP_ENV_PREFIX}}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX_OVERRIDE:-${HLA_ENV_PREFIX}}"
+CNV_ENV_PREFIX="${CNV_ENV_PREFIX_OVERRIDE:-${CNV_ENV_PREFIX}}"
+SV_ENV_PREFIX="${SV_ENV_PREFIX_OVERRIDE:-${SV_ENV_PREFIX}}"
 
 write_common_config() {
     local sample_id="$1"
@@ -280,7 +293,9 @@ CONDA_BASE="${CONDA_BASE}"
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX}"
-PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin"
+CNV_ENV_PREFIX="${CNV_ENV_PREFIX}"
+SV_ENV_PREFIX="${SV_ENV_PREFIX}"
+PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
 export PATH="\${PIPELINE_EXTRA_PATHS}:\${PATH}"
 export VEP_ENV="\${VEP_ENV_PREFIX}"
 PIPELINE_JAVA_HOME="\${MAIN_ENV_PREFIX}"
@@ -373,7 +388,9 @@ CONDA_BASE="${CONDA_BASE}"
 MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX}"
 VEP_ENV_PREFIX="${VEP_ENV_PREFIX}"
 HLA_ENV_PREFIX="${HLA_ENV_PREFIX}"
-PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin"
+CNV_ENV_PREFIX="${CNV_ENV_PREFIX}"
+SV_ENV_PREFIX="${SV_ENV_PREFIX}"
+PIPELINE_EXTRA_PATHS="\${MAIN_ENV_PREFIX}/bin:\${VEP_ENV_PREFIX}/bin:\${HLA_ENV_PREFIX}/bin:\${CNV_ENV_PREFIX}/bin:\${SV_ENV_PREFIX}/bin"
 export PATH="\${PIPELINE_EXTRA_PATHS}:\${PATH}"
 export VEP_ENV="\${VEP_ENV_PREFIX}"
 PIPELINE_JAVA_HOME="\${MAIN_ENV_PREFIX}"
@@ -477,13 +494,8 @@ USAGE
 }
 
 run_normal_all() {
-    echo "[1/3] Align normal: ${NORMAL_ID}"
-    bash run_pipeline.sh --config "${NORMAL_CONFIG}" check
-    bash run_pipeline.sh --config "${NORMAL_CONFIG}" step 1
-    bash run_pipeline.sh --config "${NORMAL_CONFIG}" step 2
-    bash run_pipeline.sh --config "${NORMAL_CONFIG}" step 3
-    bash run_pipeline.sh --config "${NORMAL_CONFIG}" step 4
-    bash run_pipeline.sh --config "${NORMAL_CONFIG}" step 5
+    echo "[1/3] Normal preprocessing and configured modules: ${NORMAL_ID}"
+    bash run_pipeline.sh --config "${NORMAL_CONFIG}"
 }
 
 run_normal_step5() {
@@ -492,13 +504,8 @@ run_normal_step5() {
 }
 
 run_tumor_all() {
-    echo "[2/3] Align tumor: ${TUMOR_ID}"
-    bash run_pipeline.sh --config "${TUMOR_CONFIG}" check
-    bash run_pipeline.sh --config "${TUMOR_CONFIG}" step 1
-    bash run_pipeline.sh --config "${TUMOR_CONFIG}" step 2
-    bash run_pipeline.sh --config "${TUMOR_CONFIG}" step 3
-    bash run_pipeline.sh --config "${TUMOR_CONFIG}" step 4
-    bash run_pipeline.sh --config "${TUMOR_CONFIG}" step 5
+    echo "[2/3] Tumor preprocessing and configured modules: ${TUMOR_ID}"
+    bash run_pipeline.sh --config "${TUMOR_CONFIG}"
 }
 
 run_tumor_step5() {
@@ -508,15 +515,7 @@ run_tumor_step5() {
 
 run_somatic() {
     echo "[3/3] Full somatic analysis: ${PAIR_ID}"
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 6
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 7
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 7c
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 7d
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 8
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 9
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 11
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 12
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 13
+    bash run_pipeline.sh --config "${SOMATIC_CONFIG}"
 }
 
 run_somatic_core() {

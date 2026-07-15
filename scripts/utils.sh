@@ -15,7 +15,9 @@ apply_runtime_defaults() {
     MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX:-${CONDA_BASE}/envs/big_wes_pipeline_env}"
     VEP_ENV_PREFIX="${VEP_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_vep_env}"
     HLA_ENV_PREFIX="${HLA_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_hla_env}"
-    PIPELINE_EXTRA_PATHS="${PIPELINE_EXTRA_PATHS:-${MAIN_ENV_PREFIX}/bin:${VEP_ENV_PREFIX}/bin:${HLA_ENV_PREFIX}/bin}"
+    CNV_ENV_PREFIX="${CNV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_cnv_env}"
+    SV_ENV_PREFIX="${SV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_sv_env}"
+    PIPELINE_EXTRA_PATHS="${PIPELINE_EXTRA_PATHS:-${MAIN_ENV_PREFIX}/bin:${VEP_ENV_PREFIX}/bin:${HLA_ENV_PREFIX}/bin:${CNV_ENV_PREFIX}/bin:${SV_ENV_PREFIX}/bin}"
     export PATH="${PIPELINE_EXTRA_PATHS}:${PATH}"
     export VEP_ENV="${VEP_ENV:-${VEP_ENV_PREFIX}}"
     PIPELINE_JAVA_HOME="${PIPELINE_JAVA_HOME:-${MAIN_ENV_PREFIX}}"
@@ -163,6 +165,8 @@ print_runtime_config() {
     log_info "MAIN_ENV_PREFIX: ${MAIN_ENV_PREFIX:-未设置}"
     log_info "VEP_ENV_PREFIX: ${VEP_ENV_PREFIX:-未设置}"
     log_info "HLA_ENV_PREFIX: ${HLA_ENV_PREFIX:-未设置}"
+    log_info "CNV_ENV_PREFIX: ${CNV_ENV_PREFIX:-未设置}"
+    log_info "SV_ENV_PREFIX: ${SV_ENV_PREFIX:-未设置}"
     log_info "PIPELINE_EXTRA_PATHS: ${PIPELINE_EXTRA_PATHS:-未设置}"
     log_info "JAVA_HOME: ${JAVA_HOME:-未设置}"
     if command -v java >/dev/null 2>&1; then
@@ -272,7 +276,7 @@ check_analysis_tools() {
         elif command -v "${TOOL_MHCFLURRY:-mhcflurry-predict}" &>/dev/null; then
             check_tool_optional "MHCflurry" "${TOOL_MHCFLURRY:-mhcflurry-predict}" || true
         else
-            log_warn "netMHCpan和mhcflurry-predict均不可用；HLA结合预测将退回simple测试模式或跳过正式预测"
+            log_warn "netMHCpan和mhcflurry-predict均不可用；auto模式会停止，simple仅可显式用于连通性测试"
         fi
     fi
 

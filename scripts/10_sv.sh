@@ -44,7 +44,7 @@ main() {
     #---------------------------------------
     local config_cmd=""
     if [ -f "${TOOL_MANTA}" ]; then
-        config_cmd="${TOOL_PYTHON:-python3} ${TOOL_MANTA}"
+        config_cmd="${TOOL_MANTA}"
     elif command -v "${TOOL_MANTA:-configManta.py}" &>/dev/null; then
         config_cmd="${TOOL_MANTA:-configManta.py}"
     else

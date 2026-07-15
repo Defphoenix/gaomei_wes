@@ -96,6 +96,13 @@ main() {
     # 确保输出目录存在
     mkdir -p "${DIR_TRIMMED}"
 
+    local output_r1="${DIR_TRIMMED}/${SAMPLE_ID}_trimmed_R1.fastq.gz"
+    local output_r2="${DIR_TRIMMED}/${SAMPLE_ID}_trimmed_R2.fastq.gz"
+    if [ -s "${output_r1}" ] && [ -s "${output_r2}" ]; then
+        log_warn "修剪后的FASTQ已存在，跳过重复运行"
+        return 0
+    fi
+
     # 根据配置选择修剪工具
     if [ "${USE_FASTP}" = true ]; then
         log_info "使用 fastp 进行数据修剪"

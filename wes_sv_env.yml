@@ -1,0 +1,9 @@
+name: wes_sv_env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Manta 1.6.0 is an archived Linux-oriented caller; keep it isolated from
+  # the Python 3 core environment so its legacy runtime cannot break GATK/VEP.
+  - manta=1.6.0
+

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run or emulate peptide-HLA binding prediction for pipeline integration tests."""
+"""Run peptide-HLA binding prediction or an explicit smoke-test scorer."""
 
 from __future__ import annotations
 
@@ -107,7 +107,10 @@ def main() -> int:
         elif shutil.which(args.mhcflurry_bin):
             tool = "mhcflurry"
         else:
-            tool = "simple"
+            raise FileNotFoundError(
+                "No production HLA predictor found. Install/configure NetMHCpan or "
+                "MHCflurry, or explicitly use --tool simple for a connectivity test."
+            )
 
     if tool == "netmhcpan":
         if not shutil.which(args.netmhcpan_bin):

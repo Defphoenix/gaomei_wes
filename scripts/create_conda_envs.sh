@@ -251,7 +251,7 @@ if [ "${VERIFY_INSTALL}" = true ]; then
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "python" python --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "java" java -version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "gatk" gatk --version
-    verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "bwa" bash -lc 'bwa 2>&1 | grep -qi version'
+    verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "bwa" bash -c 'bwa 2>&1 | grep -qi version'
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "samtools" samtools --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "bcftools" bcftools --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "fastp" fastp --version
@@ -259,15 +259,15 @@ if [ "${VERIFY_INSTALL}" = true ]; then
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "bedtools" bedtools --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "picard" picard -h
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "mosdepth" mosdepth --version
-    verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "msisensor-pro" bash -lc 'msisensor-pro 2>&1 | grep -qi msisensor'
+    verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "msisensor-pro" bash -c 'msisensor-pro 2>&1 | grep -qi msisensor'
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "multiqc" multiqc --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "snpeff" snpEff -version
-    verify_tool "${ENV_ROOT}/wes_vep_env" "vep" bash -lc 'vep --help >/dev/null'
+    verify_tool "${ENV_ROOT}/wes_vep_env" "vep" bash -c 'vep --help >/dev/null'
     if [ "${CREATE_HLA}" = true ]; then
         verify_tool "${ENV_ROOT}/wes_hla_env" "mhcflurry" mhcflurry-predict --help
     fi
     if [ "${CREATE_HLA_TYPING}" = true ]; then
-        verify_tool "${ENV_ROOT}/wes_hla_typing_env" "HLA-LA" bash -lc 'command -v HLA-LA.pl >/dev/null'
+        verify_tool "${ENV_ROOT}/wes_hla_typing_env" "HLA-LA" bash -c 'command -v HLA-LA.pl >/dev/null'
     fi
     if [ "${CREATE_CNV}" = true ]; then
         verify_tool "${ENV_ROOT}/wes_cnv_env" "cnvkit" cnvkit.py version

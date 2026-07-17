@@ -85,4 +85,3 @@ bash scripts/create_conda_envs.sh \
 
 软件安装完成后仍需准备参考数据和模型。不要在缺少 VEP cache、蛋白 FASTA、
 capture BED 或必要索引时直接开始正式样本。
-

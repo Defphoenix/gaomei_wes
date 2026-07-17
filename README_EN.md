@@ -1,6 +1,35 @@
-# WES Tumor-Normal and Single-Sample Pipeline
+# GAOMEI WES
 
-[中文](README.md) | **English**
+<p align="center">
+  <img src="docs/assets/wes-v1-banner.png" alt="GAOMEI WES tumor-normal analysis workflow" width="100%">
+</p>
+
+<p align="center">
+  <strong>A reproducible WES workflow for tumor-normal pairs and single samples</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Defphoenix/gaomei_wes/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-0f766e?style=for-the-badge" alt="release v1.0.0"></a>
+  <a href="https://github.com/Defphoenix/gaomei_wes/actions/workflows/code-tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/Defphoenix/gaomei_wes/code-tests.yml?branch=main&amp;style=for-the-badge&amp;label=code%20tests" alt="code tests"></a>
+  <a href="#install-with-mamba"><img src="https://img.shields.io/badge/install-Mamba%20%7C%20Conda-44A833?style=for-the-badge&amp;logo=anaconda&amp;logoColor=white" alt="install with Mamba or Conda"></a>
+  <img src="https://img.shields.io/badge/platform-Linux%20x86__64-FCC624?style=for-the-badge&amp;logo=linux&amp;logoColor=black" alt="Linux x86_64">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/GATK-4.6.2.0-6b7280?style=flat-square" alt="GATK 4.6.2.0">
+  <img src="https://img.shields.io/badge/Ensembl%20VEP-115-2563eb?style=flat-square" alt="Ensembl VEP 115">
+  <img src="https://img.shields.io/badge/reference-GRCh38-0891b2?style=flat-square" alt="GRCh38">
+  <img src="https://img.shields.io/badge/CNVkit-0.9.12-d97706?style=flat-square" alt="CNVkit 0.9.12">
+  <img src="https://img.shields.io/badge/HLA-HLA*LA%20%2B%20MHCflurry-db2777?style=flat-square" alt="HLA-LA and MHCflurry">
+  <img src="https://img.shields.io/badge/use-research%20only-b91c1c?style=flat-square" alt="research use only">
+</p>
+
+<p align="center">
+  <a href="README.md">中文</a> | <strong>English</strong> |
+  <a href="docs/V1.0_zh.md">v1.0 notes</a> |
+  <a href="docs/install_update_zh.md">installation</a> |
+  <a href="docs/software_database_inventory.md">software and databases</a>
+</p>
 
 This repository provides a server-deployable Shell/Python WES workflow with
 single-sample germline and matched tumor-normal somatic modes. It is suitable
@@ -10,12 +39,22 @@ and a governed interpretation layer.
 
 ## Workflow
 
-```text
-FASTQ -> FastQC -> fastp -> BWA-MEM -> sort/index -> duplicate marking
-      -> post-alignment QC -> optional BQSR -> optional HLA*LA typing
-      -> HaplotypeCaller or matched Mutect2 -> contamination/orientation filtering
-      -> optional SnpEff/VEP -> neoantigen peptides -> optional HLA binding
-      -> optional CNV/MSI/SV -> coverage/TMB -> summary/MultiQC
+```mermaid
+flowchart LR
+    NF[Normal FASTQ] --> NP[QC / BWA / Dedup / BQSR]
+    TF[Tumor FASTQ] --> TP[QC / BWA / Dedup / BQSR]
+    NP --> HLA[HLA*LA typing]
+    NP --> M2[Paired Mutect2]
+    TP --> M2
+    M2 --> VF[Contamination / Orientation / Filter]
+    VF --> VEP[VEP annotation]
+    VEP --> NEO[Neoantigen / HLA binding]
+    VEP --> TMB[Strict TMB]
+    TP --> OTHER[CNV / MSI / SV / Coverage]
+    HLA --> REPORT[Chinese HTML report]
+    NEO --> REPORT
+    TMB --> REPORT
+    OTHER --> REPORT
 ```
 
 The project supports:

@@ -13,10 +13,10 @@ TUMOR_ID=""
 NORMAL_ID=""
 PROJECT_NAME="wes_tumor_normal_project"
 COPY_MODE="copy"
-REFERENCE_DIR="/Users/mac/Documents/wes/reference_data"
+REFERENCE_DIR="${WES_REFERENCE_DIR:-${SOURCE_PROJECT_DIR}/reference}"
 REFERENCE_GENOME=""
 INTERVAL_BED=""
-CONDA_BASE="/Users/mac/anaconda3"
+CONDA_BASE="${CONDA_BASE:-${HOME}/miniforge3}"
 ENV_ROOT=""
 MAIN_ENV_PREFIX_OVERRIDE=""
 VEP_ENV_PREFIX_OVERRIDE=""
@@ -289,6 +289,45 @@ else
     echo "       Project will retain orientation modeling but skip contamination estimation until configured." >&2
 fi
 
+MUTECT2_GERMLINE_VCF=""
+for candidate in \
+    "${REFERENCE_DIR}/mutect2/af-only-gnomad.hg38.vcf.gz" \
+    "${REFERENCE_DIR}/mutect2/somatic-hg38_af-only-gnomad.hg38.vcf.gz"; do
+    if [ -f "${candidate}" ] && { [ -f "${candidate}.tbi" ] || [ -f "${candidate}.idx" ]; }; then
+        MUTECT2_GERMLINE_VCF="${candidate}"
+        break
+    fi
+done
+if [ -z "${MUTECT2_GERMLINE_VCF}" ]; then
+    echo "[WARN] Mutect2 AF-only germline resource not found under ${REFERENCE_DIR}/mutect2" >&2
+fi
+
+MUTECT2_PON_VCF=""
+for candidate in \
+    "${REFERENCE_DIR}/mutect2/1000g_pon.hg38.vcf.gz" \
+    "${REFERENCE_DIR}/mutect2/somatic-hg38_1000g_pon.hg38.vcf.gz"; do
+    if [ -f "${candidate}" ] && { [ -f "${candidate}.tbi" ] || [ -f "${candidate}.idx" ]; }; then
+        MUTECT2_PON_VCF="${candidate}"
+        break
+    fi
+done
+if [ -z "${MUTECT2_PON_VCF}" ]; then
+    echo "[WARN] Mutect2 panel-of-normals not found under ${REFERENCE_DIR}/mutect2" >&2
+fi
+
+MSISENSOR_LIST=""
+for candidate in \
+    "${REFERENCE_DIR}/msi/hg38.capture.list" \
+    "${REFERENCE_DIR}/msisensor/hg38.list"; do
+    if [ -f "${candidate}" ]; then
+        MSISENSOR_LIST="${candidate}"
+        break
+    fi
+done
+if [ -z "${MSISENSOR_LIST}" ]; then
+    echo "[WARN] Capture-compatible MSIsensor list not found; MSI will produce a smoke result until configured." >&2
+fi
+
 TMB_CODING_BED="${REFERENCE_DIR}/tmb/effective_coding_regions.bed"
 TMB_DENOMINATOR_VALIDATED=true
 if [ ! -f "${TMB_CODING_BED}" ]; then
@@ -342,6 +381,7 @@ RAW_DATA_DIR="$(dirname "${r1}")"
 FASTQ_R1="${r1}"
 FASTQ_R2="${r2}"
 
+REFERENCE_DIR="${REFERENCE_DIR}"
 REFERENCE_GENOME="${REFERENCE_GENOME}"
 REFERENCE_DICT="${REFERENCE_GENOME%.fasta}.dict"
 REFERENCE_BWA_INDEX="\${REFERENCE_GENOME}"
@@ -349,12 +389,14 @@ REFERENCE_GENOME_VERSION="hg38"
 DBSNP_VCF="${REFERENCE_DIR}/dbsnp_146.hg38.vcf.gz"
 DBSNP_VCF_INDEX="\${DBSNP_VCF}.tbi"
 MILLS_VCF="${REFERENCE_DIR}/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
+KNOWN_INDELS_VCF="\${MILLS_VCF}"
 THOUSAND_G_VCF="${REFERENCE_DIR}/1000G_phase1.snps.high_confidence.hg38.vcf.gz"
 VEP_CACHE_DIR="${REFERENCE_DIR}/vep_cache"
 MUTECT2_COMMON_VARIANTS_VCF="${MUTECT2_COMMON_VCF}"
 RUN_MUTECT2_ORIENTATION_MODEL=true
 RUN_MUTECT2_CONTAMINATION=true
 MUTECT2_REQUIRE_AUXILIARY="${MUTECT2_AUX_REQUIRED}"
+MUTECT2_MAX_READS_PER_ALIGNMENT_START=50
 VEP_FASTA="\${REFERENCE_GENOME}"
 NEOANTIGEN_ANNOVAR_TXT=""
 NEOANTIGEN_PROTEIN_FASTA="${REFERENCE_DIR}/protein/protein.fa"
@@ -386,7 +428,7 @@ DIR_SUMMARY="\${RESULT_DIR}/summary"
 DIR_MULTIQC="\${RESULT_DIR}/multiqc"
 DIR_LOGS="${OUT_DIR}/logs"
 
-RUN_BQSR=false
+RUN_BQSR=true
 RUN_SNPEFF=false
 RUN_VEP=false
 RUN_NEOANTIGEN=false
@@ -396,7 +438,7 @@ RUN_MSI=false
 RUN_COVERAGE=true
 RUN_TMB=false
 
-SKIP_BQSR=true
+SKIP_BQSR=false
 SKIP_VARIANT_CALLING=true
 SKIP_VARIANT_FILTER=true
 SKIP_SNPEFF=true
@@ -446,11 +488,24 @@ export SNPEFF_ENV="\${SNPEFF_ENV_PREFIX}"
 PIPELINE_JAVA_HOME="\${MAIN_ENV_PREFIX}"
 export JAVA_HOME="\${PIPELINE_JAVA_HOME}"
 
-TUMOR_BAM="${TUMOR_RESULT_DIR}/aligned/${TUMOR_ID}.dedup.bam"
-NORMAL_BAM="${NORMAL_RESULT_DIR}/aligned/${NORMAL_ID}.dedup.bam"
+TUMOR_BQSR_BAM="${TUMOR_RESULT_DIR}/bqsr/${TUMOR_ID}.bqsr.bam"
+NORMAL_BQSR_BAM="${NORMAL_RESULT_DIR}/bqsr/${NORMAL_ID}.bqsr.bam"
+TUMOR_DEDUP_BAM="${TUMOR_RESULT_DIR}/aligned/${TUMOR_ID}.dedup.bam"
+NORMAL_DEDUP_BAM="${NORMAL_RESULT_DIR}/aligned/${NORMAL_ID}.dedup.bam"
+if [ -s "\${TUMOR_BQSR_BAM}" ] && "\${TOOL_SAMTOOLS:-samtools}" quickcheck "\${TUMOR_BQSR_BAM}" >/dev/null 2>&1; then
+    TUMOR_BAM="\${TUMOR_BQSR_BAM}"
+else
+    TUMOR_BAM="\${TUMOR_DEDUP_BAM}"
+fi
+if [ -s "\${NORMAL_BQSR_BAM}" ] && "\${TOOL_SAMTOOLS:-samtools}" quickcheck "\${NORMAL_BQSR_BAM}" >/dev/null 2>&1; then
+    NORMAL_BAM="\${NORMAL_BQSR_BAM}"
+else
+    NORMAL_BAM="\${NORMAL_DEDUP_BAM}"
+fi
 FASTQ_R1="${TUMOR_TARGET_R1}"
 FASTQ_R2="${TUMOR_TARGET_R2}"
 
+REFERENCE_DIR="${REFERENCE_DIR}"
 REFERENCE_GENOME="${REFERENCE_GENOME}"
 REFERENCE_DICT="${REFERENCE_GENOME%.fasta}.dict"
 REFERENCE_BWA_INDEX="\${REFERENCE_GENOME}"
@@ -458,12 +513,16 @@ REFERENCE_GENOME_VERSION="hg38"
 DBSNP_VCF="${REFERENCE_DIR}/dbsnp_146.hg38.vcf.gz"
 DBSNP_VCF_INDEX="\${DBSNP_VCF}.tbi"
 MILLS_VCF="${REFERENCE_DIR}/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
+KNOWN_INDELS_VCF="\${MILLS_VCF}"
 THOUSAND_G_VCF="${REFERENCE_DIR}/1000G_phase1.snps.high_confidence.hg38.vcf.gz"
+GERMLINE_RESOURCE_VCF="${MUTECT2_GERMLINE_VCF}"
+PANEL_OF_NORMALS="${MUTECT2_PON_VCF}"
 VEP_CACHE_DIR="${REFERENCE_DIR}/vep_cache"
 MUTECT2_COMMON_VARIANTS_VCF="${MUTECT2_COMMON_VCF}"
 RUN_MUTECT2_ORIENTATION_MODEL=true
 RUN_MUTECT2_CONTAMINATION=true
 MUTECT2_REQUIRE_AUXILIARY="${MUTECT2_AUX_REQUIRED}"
+MUTECT2_MAX_READS_PER_ALIGNMENT_START=50
 VEP_FASTA="\${REFERENCE_GENOME}"
 NEOANTIGEN_ANNOVAR_TXT=""
 NEOANTIGEN_PROTEIN_FASTA="${REFERENCE_DIR}/protein/protein.fa"
@@ -471,8 +530,15 @@ NEOANTIGEN_PEPTIDE_LENGTHS="8-15"
 RUN_HLA_TYPING=false
 HLA_LA_GRAPH_DIR="${REFERENCE_DIR}/hla/PRG_MHC_GRCh38_withIMGT"
 HLA_TYPING_ALLELES_FILE="${NORMAL_RESULT_DIR}/hla_typing/${NORMAL_ID}_hla_binding_alleles.txt"
+MSISENSOR2_LIST="${MSISENSOR_LIST}"
+MSISENSOR_SCAN_REFERENCE=false
+MSI_SMOKE_TEST=true
 INTERVAL_FILE="${INTERVAL_BED}"
 CNVKIT_TARGET_BED="${INTERVAL_BED}"
+CNV_METHOD="auto"
+CNV_REQUIRE_REFERENCE=false
+RUN_BEDTOOLS_COVERAGE=false
+RUN_BEDTOOLS_MULTICOV=false
 TMB_EFFECTIVE_CODING_BED="${TMB_CODING_BED}"
 TMB_DENOMINATOR_VALIDATED="${TMB_DENOMINATOR_VALIDATED}"
 
@@ -540,9 +606,9 @@ Usage: bash \$(basename "\$0") [all|all-core|normal|normal5|tumor|tumor5|somatic
 
   all            Run normal alignment, tumor alignment, then full somatic steps.
   all-core       Run normal alignment, tumor alignment, then core somatic steps.
-  normal         Run normal check + steps 1-5 only.
+  normal         Run normal preprocessing only: steps 1-5d; no variant calling.
   normal5        Re-run normal step 5 only.
-  tumor          Run tumor check + steps 1-5 only.
+  tumor          Run tumor preprocessing only: steps 1-5d; no variant calling.
   tumor5         Re-run tumor step 5 only.
   somatic        Run full somatic steps only: Mutect2/filter/VEP/neoantigen/CNV/MSI/coverage/TMB/summary.
   somatic-core   Run core somatic steps only: Mutect2/filter/coverage.
@@ -555,8 +621,9 @@ USAGE
 }
 
 run_normal_all() {
-    echo "[1/3] Normal preprocessing and configured modules: ${NORMAL_ID}"
-    bash run_pipeline.sh --config "${NORMAL_CONFIG}"
+    echo "[1/3] Normal FASTQ-to-BQSR preprocessing and HLA typing: ${NORMAL_ID}"
+    echo "      Variant calling is reserved for the paired somatic stage."
+    bash run_pipeline.sh --config "${NORMAL_CONFIG}" through 5d
 }
 
 run_normal_step5() {
@@ -565,8 +632,9 @@ run_normal_step5() {
 }
 
 run_tumor_all() {
-    echo "[2/3] Tumor preprocessing and configured modules: ${TUMOR_ID}"
-    bash run_pipeline.sh --config "${TUMOR_CONFIG}"
+    echo "[2/3] Tumor FASTQ-to-BQSR preprocessing: ${TUMOR_ID}"
+    echo "      Variant calling is reserved for the paired somatic stage."
+    bash run_pipeline.sh --config "${TUMOR_CONFIG}" through 5d
 }
 
 run_tumor_step5() {
@@ -576,11 +644,12 @@ run_tumor_step5() {
 
 run_somatic() {
     echo "[3/3] Full somatic analysis: ${PAIR_ID}"
-    bash run_pipeline.sh --config "${SOMATIC_CONFIG}"
+    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" from 6
 }
 
 run_somatic_core() {
     echo "[3/3] Core somatic analysis: ${PAIR_ID}"
+    bash run_pipeline.sh --config "${SOMATIC_CONFIG}" check
     bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 6
     bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 7
     bash run_pipeline.sh --config "${SOMATIC_CONFIG}" step 11
@@ -654,7 +723,7 @@ PAIR_RUNNER="${RUNNER}"
 
 usage() {
     cat <<USAGE
-Usage: bash run_pipeline.sh [all-core|all|full|normal|tumor|somatic-core|somatic|check|status|list|step ROLE N|from ROLE N]
+Usage: bash run_pipeline.sh [all-core|all|full|normal|tumor|somatic-core|somatic|check|status|list|step ROLE N|through ROLE N|from ROLE N]
 
 Default:
   bash run_pipeline.sh              Run full: normal + tumor + Mutect2/filter/VEP/neoantigen/CNV/MSI/coverage/TMB/summary.
@@ -662,8 +731,8 @@ Default:
 Project modes:
   all-core                          Run normal, tumor, then core somatic analysis.
   all | full                        Run normal, tumor, then full somatic analysis.
-  normal                            Run normal FASTQ to BAM.
-  tumor                             Run tumor FASTQ to BAM.
+  normal                            Run normal FASTQ to BQSR/HLA only; no variant calling.
+  tumor                             Run tumor FASTQ to BQSR only; no variant calling.
   somatic-core                      Run Mutect2/filter/coverage only.
   somatic                           Run full somatic analysis only.
 
@@ -674,6 +743,7 @@ Debug modes:
   step normal 4                     Run one normal step.
   step tumor 5                      Run one tumor step.
   step somatic 6                    Run one somatic step.
+  through normal 5d                Run normal preprocessing through HLA typing.
   from normal 4                     Continue normal from step 4.
   from tumor 4                      Continue tumor from step 4.
   from somatic 6                    Continue somatic from step 6.
@@ -718,7 +788,7 @@ case "\${1:-all}" in
     list)
         run_internal "\${SOMATIC_CONFIG}" list
         ;;
-    step|from)
+    step|through|from)
         action="\$1"
         role="\${2:-}"
         step_id="\${3:-}"
@@ -756,6 +826,18 @@ Run:
 cd "${OUT_DIR}"
 bash run_pipeline.sh
 \`\`\`
+
+Execution model:
+
+\`\`\`text
+normal FASTQ -> normal BQSR BAM -> HLA typing
+tumor FASTQ  -> tumor BQSR BAM
+normal BQSR BAM + tumor BQSR BAM -> one paired Mutect2/somatic analysis
+\`\`\`
+
+The normal and tumor preprocessing stages intentionally stop at step 5d and do
+not create independent VCFs. Variant calling is performed once in the somatic
+stage with both BAMs.
 
 Core test run:
 

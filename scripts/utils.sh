@@ -11,14 +11,16 @@
 # 配置默认值兜底
 #---------------------------------------
 apply_runtime_defaults() {
-    CONDA_BASE="${CONDA_BASE:-/Users/mac/anaconda3}"
-    MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX:-${CONDA_BASE}/envs/big_wes_pipeline_env}"
-    VEP_ENV_PREFIX="${VEP_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_vep_env}"
-    SNPEFF_ENV_PREFIX="${SNPEFF_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_snpeff_env}"
-    HLA_ENV_PREFIX="${HLA_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_hla_env}"
-    HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_hla_typing_env}"
-    CNV_ENV_PREFIX="${CNV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_cnv_env}"
-    SV_ENV_PREFIX="${SV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_sv_env}"
+    local runtime_project_dir="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+    local runtime_env_root="${ENV_ROOT:-${runtime_project_dir}/.conda_envs}"
+    CONDA_BASE="${CONDA_BASE:-${HOME}/miniforge3}"
+    MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX:-${runtime_env_root}/big_wes_pipeline_env}"
+    VEP_ENV_PREFIX="${VEP_ENV_PREFIX:-${runtime_env_root}/wes_vep_env}"
+    SNPEFF_ENV_PREFIX="${SNPEFF_ENV_PREFIX:-${runtime_env_root}/wes_snpeff_env}"
+    HLA_ENV_PREFIX="${HLA_ENV_PREFIX:-${runtime_env_root}/wes_hla_env}"
+    HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX:-${runtime_env_root}/wes_hla_typing_env}"
+    CNV_ENV_PREFIX="${CNV_ENV_PREFIX:-${runtime_env_root}/wes_cnv_env}"
+    SV_ENV_PREFIX="${SV_ENV_PREFIX:-${runtime_env_root}/wes_sv_env}"
     PIPELINE_EXTRA_PATHS="${PIPELINE_EXTRA_PATHS:-${MAIN_ENV_PREFIX}/bin:${VEP_ENV_PREFIX}/bin:${HLA_ENV_PREFIX}/bin:${HLA_TYPING_ENV_PREFIX}/bin:${CNV_ENV_PREFIX}/bin:${SV_ENV_PREFIX}/bin}"
     export PATH="${PIPELINE_EXTRA_PATHS}:${PATH}"
     export VEP_ENV="${VEP_ENV:-${VEP_ENV_PREFIX}}"
@@ -36,6 +38,7 @@ apply_runtime_defaults() {
     TOOL_SNPEFF="${TOOL_SNPEFF:-${PROJECT_DIR}/scripts/run_snpeff_env.sh}"
     TOOL_SNPSIFT="${TOOL_SNPSIFT:-${PROJECT_DIR}/scripts/run_snpsift_env.sh}"
     TOOL_VEP="${TOOL_VEP:-${PROJECT_DIR}/scripts/run_vep_env.sh}"
+    TOOL_CNVKIT="${TOOL_CNVKIT:-${PROJECT_DIR}/scripts/run_cnvkit_env.sh}"
     TOOL_MANTA="${TOOL_MANTA:-configManta.py}"
 }
 
@@ -181,6 +184,121 @@ print_runtime_config() {
     fi
     log_info "TOOL_PYTHON: ${TOOL_PYTHON:-python3}"
     log_info "TOOL_VEP: ${TOOL_VEP:-vep}"
+    log_info "SAMPLE: ${SAMPLE_ID:-未设置} (${SAMPLE_TYPE:-未设置}, ${ANALYSIS_MODE:-未设置})"
+    log_info "REFERENCE_DIR: ${REFERENCE_DIR:-未设置}"
+    log_info "REFERENCE_GENOME: ${REFERENCE_GENOME:-未设置}"
+    log_info "INTERVAL_FILE: ${INTERVAL_FILE:-未设置}"
+    log_info "BQSR: RUN=${RUN_BQSR:-false}, SKIP=${SKIP_BQSR:-true}"
+    log_info "HLA_TYPING: RUN=${RUN_HLA_TYPING:-false}, SKIP=${SKIP_HLA_TYPING:-false}"
+    log_info "VEP: RUN=${RUN_VEP:-false}, SKIP=${SKIP_VEP:-true}"
+    log_info "NEOANTIGEN: RUN=${RUN_NEOANTIGEN:-false}, SKIP=${SKIP_NEOANTIGEN:-true}"
+    log_info "CNV/MSI/TMB: ${RUN_CNV:-false}/${RUN_MSI:-false}/${RUN_TMB:-false}"
+}
+
+#---------------------------------------
+# 检查配置开关和关键资源是否自洽
+#---------------------------------------
+check_config_consistency() {
+    local has_error=0
+    log_step "检查配置一致性"
+
+    if [ "${SKIP_ALIGN:-false}" = false ] && \
+       { [ "${RUN_BQSR:-false}" != true ] || [ "${SKIP_BQSR:-true}" = true ]; }; then
+        log_warn "当前样本会执行比对，但BQSR已关闭 (RUN_BQSR=${RUN_BQSR:-false}, SKIP_BQSR=${SKIP_BQSR:-true})"
+    fi
+
+    if [ "${RUN_BQSR:-false}" = true ] && [ "${SKIP_BQSR:-true}" = false ]; then
+        if [ -z "${DBSNP_VCF:-}" ] || [ ! -f "${DBSNP_VCF}" ]; then
+            log_error "BQSR已启用，但DBSNP_VCF不存在: ${DBSNP_VCF:-未配置}"
+            has_error=1
+        elif [ ! -f "${DBSNP_VCF_INDEX:-${DBSNP_VCF}.tbi}" ] && [ ! -f "${DBSNP_VCF}.idx" ]; then
+            log_error "BQSR dbSNP缺少索引: ${DBSNP_VCF_INDEX:-${DBSNP_VCF}.tbi} 或 ${DBSNP_VCF}.idx"
+            has_error=1
+        fi
+        local known_indels="${KNOWN_INDELS_VCF:-${MILLS_VCF:-}}"
+        if [ -z "${known_indels}" ] || [ ! -f "${known_indels}" ]; then
+            log_warn "BQSR known-indels未配置；建议设置 KNOWN_INDELS_VCF/MILLS_VCF"
+        fi
+    fi
+
+    if [ "${RUN_VEP:-false}" = true ] && [ "${SKIP_VEP:-true}" = false ]; then
+        if [ -z "${VEP_CACHE_DIR:-}" ] || [ ! -d "${VEP_CACHE_DIR}" ]; then
+            log_error "VEP已启用，但VEP_CACHE_DIR不存在: ${VEP_CACHE_DIR:-未配置}"
+            has_error=1
+        fi
+    fi
+
+    if [ "${RUN_NEOANTIGEN:-false}" = true ] && [ "${SKIP_NEOANTIGEN:-true}" = false ]; then
+        if [ -z "${NEOANTIGEN_PROTEIN_FASTA:-}" ] || [ ! -f "${NEOANTIGEN_PROTEIN_FASTA}" ]; then
+            log_error "新抗原已启用，但蛋白FASTA不存在: ${NEOANTIGEN_PROTEIN_FASTA:-未配置}"
+            has_error=1
+        fi
+    fi
+
+    if [ "${RUN_HLA_TYPING:-false}" != false ] && [ "${SKIP_HLA_TYPING:-false}" = false ]; then
+        if [ -z "${HLA_LA_GRAPH_DIR:-}" ] || [ ! -f "${HLA_LA_GRAPH_DIR}/serializedGRAPH" ]; then
+            if [ "${HLA_TYPING_REQUIRED:-false}" = true ]; then
+                log_error "HLA分型为必需，但graph未完成prepare: ${HLA_LA_GRAPH_DIR:-未配置}"
+                has_error=1
+            else
+                log_warn "HLA*LA graph未完成prepare，auto模式将跳过: ${HLA_LA_GRAPH_DIR:-未配置}"
+            fi
+        fi
+    fi
+
+    if [ "${RUN_MSI:-false}" = true ] && [ "${SKIP_MSI:-true}" = false ] && \
+       { [ -z "${MSISENSOR2_LIST:-}" ] || [ ! -f "${MSISENSOR2_LIST}" ]; } && \
+       [ "${MSISENSOR_SCAN_REFERENCE:-false}" != true ]; then
+        log_warn "MSI已启用但没有MSISENSOR2_LIST；当前只会生成smoke/NOT_RUN结果"
+    fi
+
+    if [ "${CALLER_MODE:-}" = mutect2 ] && [ "${SKIP_VARIANT_CALLING:-false}" = false ]; then
+        [ -n "${GERMLINE_RESOURCE_VCF:-}" ] && [ -f "${GERMLINE_RESOURCE_VCF}" ] || \
+            log_warn "Mutect2未配置AF-only germline resource"
+        [ -n "${PANEL_OF_NORMALS:-}" ] && [ -f "${PANEL_OF_NORMALS}" ] || \
+            log_warn "Mutect2未配置Panel of Normals"
+        if [ "${RUN_MUTECT2_CONTAMINATION:-true}" = true ] && \
+           { [ -z "${MUTECT2_COMMON_VARIANTS_VCF:-}" ] || [ ! -f "${MUTECT2_COMMON_VARIANTS_VCF}" ]; }; then
+            if [ "${MUTECT2_REQUIRE_AUXILIARY:-false}" = true ]; then
+                log_error "Mutect2污染估计为必需，但common-variants VCF缺失"
+                has_error=1
+            else
+                log_warn "Mutect2 common-variants VCF缺失，污染估计将跳过"
+            fi
+        fi
+        if [ -n "${MUTECT2_MAX_READS_PER_ALIGNMENT_START:-}" ] && \
+           [ "${MUTECT2_MAX_READS_PER_ALIGNMENT_START}" -lt 20 ] 2>/dev/null; then
+            log_warn "Mutect2 max-reads-per-alignment-start=${MUTECT2_MAX_READS_PER_ALIGNMENT_START}偏低，可能损失低VAF突变；正式分析建议使用50"
+        fi
+    fi
+
+    if [ "${RUN_CNV:-false}" = true ] && [ "${SKIP_CNV:-true}" = false ]; then
+        local has_cnv_baseline=false
+        if [ -n "${CNVKIT_REFERENCE:-}" ] && [ -s "${CNVKIT_REFERENCE}" ]; then
+            has_cnv_baseline=true
+        elif [ -n "${NORMAL_BAM:-}" ] && bam_is_complete "${NORMAL_BAM}"; then
+            has_cnv_baseline=true
+        fi
+        if [ "${has_cnv_baseline}" != true ]; then
+            if [ "${CNV_REQUIRE_REFERENCE:-false}" = true ]; then
+                log_error "CNV要求matched/pooled normal reference，但当前未找到"
+                has_error=1
+            else
+                log_warn "CNV缺少matched/pooled normal reference；auto模式只会输出depth_qc，不会输出正式CNV calls"
+            fi
+        fi
+    fi
+
+    if [ "${RUN_TMB:-false}" = true ] && [ "${SKIP_TMB:-true}" = false ] && \
+       [ "${TMB_DENOMINATOR_VALIDATED:-false}" != true ]; then
+        log_warn "TMB分母BED尚未经方法学验证，结果应标记为研发用"
+    fi
+
+    if [ ${has_error} -ne 0 ]; then
+        return 1
+    fi
+    log_info "配置一致性检查通过"
+    return 0
 }
 
 #---------------------------------------
@@ -389,13 +507,14 @@ create_output_dirs() {
 print_banner() {
     echo -e "${BLUE}"
     echo "╔══════════════════════════════════════════════════════════════════╗"
-    echo "║       突变分析流程 (Mutation Analysis Pipeline) - 完整版       ║"
+    echo "║       WES分析流程 (WES Analysis Pipeline) v${PIPELINE_VERSION:-1.0.0}             ║"
     echo "║                                                                  ║"
     echo "║  FASTQ → QC → Trim → Align → BQSR → Call → Filter → Annotate  ║"
     echo "║  CNV → SV → MSI → Coverage → TMB → MultiQC → Report           ║"
     echo "╚══════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     echo "  样本ID:      ${SAMPLE_ID}"
+    echo "  流程版本:    ${PIPELINE_VERSION:-1.0.0}"
     echo "  样本类型:    ${SAMPLE_TYPE}"
     echo "  检测模式:    ${CALLER_MODE}"
     echo "  参考基因组:  ${REFERENCE_GENOME}"
@@ -410,7 +529,7 @@ print_banner() {
     echo "    [变异] GATK ${CALLER_MODE}"
     echo "    [注释] SnpEff + VEP"
     echo "    [免疫] 新抗原候选肽 + HLA结合预测"
-    echo "    [CNV]  CNVkit / mosdepth depth-ratio"
+    echo "    [CNV]  CNVkit matched/reference CNV；mosdepth depth QC"
     echo "    [SV]   Manta"
     echo "    [MSI]  MSIsensor-pro"
     echo "    [覆盖] mosdepth + bedtools"
@@ -474,8 +593,14 @@ check_disk_space() {
 #---------------------------------------
 # 获取最终BAM路径 (自动判断是否经过BQSR)
 #---------------------------------------
+bam_is_complete() {
+    local bam="$1"
+    [ -s "${bam}" ] || return 1
+    "${TOOL_SAMTOOLS:-samtools}" quickcheck "${bam}" >/dev/null 2>&1
+}
+
 get_final_bam() {
-    if [ -n "${TUMOR_BAM:-}" ] && [ -f "${TUMOR_BAM}" ]; then
+    if [ -n "${TUMOR_BAM:-}" ] && bam_is_complete "${TUMOR_BAM}"; then
         echo "${TUMOR_BAM}"
         return 0
     fi
@@ -484,14 +609,14 @@ get_final_bam() {
     local dedup_bam="${DIR_ALIGNED}/${SAMPLE_ID}.dedup.bam"
     local sorted_bam="${DIR_ALIGNED}/${SAMPLE_ID}.sorted.bam"
 
-    if [ -f "${bqsr_bam}" ]; then
+    if bam_is_complete "${bqsr_bam}"; then
         echo "${bqsr_bam}"
-    elif [ -f "${dedup_bam}" ]; then
+    elif bam_is_complete "${dedup_bam}"; then
         echo "${dedup_bam}"
-    elif [ -f "${sorted_bam}" ]; then
+    elif bam_is_complete "${sorted_bam}"; then
         echo "${sorted_bam}"
     else
-        log_error "未找到可用的BAM文件!"
+        log_error "未找到完整且可读取的BAM文件!"
         return 1
     fi
 }

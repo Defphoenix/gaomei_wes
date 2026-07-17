@@ -44,9 +44,7 @@ ENV_ROOT=/PUBLIC/gomics/guofenghua/envs/wes
 bash scripts/create_conda_envs.sh \
   --env-root "${ENV_ROOT}" \
   --mamba-bin mamba \
-  --with-hla \
-  --with-hla-typing \
-  --with-cnv
+  --production
 ```
 
 推荐配置会创建以下 prefix：
@@ -61,7 +59,8 @@ bash scripts/create_conda_envs.sh \
 | `wes_cnv_env` | CNVkit | 独立 Python/R 依赖 |
 
 安装器会生成 `${ENV_ROOT}/env.sh`，并将实际解析的软件版本、build 和下载地址
-写入 `${ENV_ROOT}/manifests/`。
+写入 `${ENV_ROOT}/manifests/`。`--production` 包含 HLA binding、HLA typing 和
+CNVkit，但不安装已归档的 Manta。安装末尾会自动执行轻量代码回归测试。
 
 ### 1.3 加载并验证
 
@@ -77,6 +76,9 @@ vep --help >/dev/null && echo VEP_OK
 bash scripts/run_snpeff_env.sh -version
 bash scripts/run_snpsift_env.sh -h 2>&1 | head
 mamba run -p "${ENV_ROOT}/wes_cnv_env" cnvkit.py version
+mamba run -p "${ENV_ROOT}/wes_cnv_env" \
+  Rscript -e 'stopifnot(requireNamespace("DNAcopy", quietly=TRUE))'
+bash scripts/run_code_tests.sh
 ```
 
 这些环境由绝对路径创建，激活时也必须使用完整路径：
@@ -109,9 +111,7 @@ prefix，然后重新运行工具验证：
 bash scripts/create_conda_envs.sh \
   --env-root "${ENV_ROOT}" \
   --mamba-bin mamba \
-  --with-hla \
-  --with-hla-typing \
-  --with-cnv
+  --production
 ```
 
 例如引入 `wes_snpeff_env` 后，不需要删除或重建 GATK 主环境。
@@ -124,9 +124,7 @@ bash scripts/create_conda_envs.sh \
 bash scripts/create_conda_envs.sh \
   --env-root "${ENV_ROOT}" \
   --mamba-bin mamba \
-  --with-hla \
-  --with-hla-typing \
-  --with-cnv \
+  --production \
   --update-existing
 ```
 
@@ -153,6 +151,7 @@ reference_data/
 ├── protein/protein.fa
 ├── mutect2/small_exac_common_3.hg38.vcf.gz
 ├── hla/PRG_MHC_GRCh38_withIMGT/
+├── cnvkit/reference.cnn                 # 可选；没有时配对项目使用matched normal
 └── msi/<capture-kit>.list
 ```
 

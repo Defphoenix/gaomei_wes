@@ -16,7 +16,7 @@
 | VEP | Ensembl VEP 115.2 | 离线转录本和蛋白后果注释 |
 | HLA，可选 | MHCflurry | HLA-I binding；模型另行下载 |
 | HLA typing，可选、Linux | HLA*LA 1.0.4 | WES BAM G-group分型；graph另行准备 |
-| CNV，可选 | CNVkit 0.9.12 | 正式 CNV 主工具 |
+| CNV，可选 | CNVkit 0.9.12、DNAcopy | matched/pooled normal CNV与CBS分段 |
 | SV，可选、Linux | Manta 1.6.0 | 兼容 SV 模块；上游项目已归档 |
 
 推荐安装：
@@ -25,9 +25,7 @@
 bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
-  --with-hla \
-  --with-hla-typing \
-  --with-cnv
+  --production
 ```
 
 Linux 服务器确实需要 Manta 时增加 `--with-sv`。首次安装 MHCflurry 模型可增加
@@ -89,6 +87,7 @@ reference_data/
 ## 重要说明
 
 - MHCflurry/NetMHCpan 做的是 binding prediction，不等于 HLA typing。
-- mosdepth 深度比例是 CNV 连通性 fallback，不应替代校准后的 CNVkit 结果。
+- mosdepth 只输出 `depth_qc.tsv`，不生成 CNR/CNS/VCF，也不应解释为CNV调用。
+- CNVkit 使用单个matched normal可做研发复测；正式生产应使用同平台normal队列构建reference。
 - 缺少 MSI 位点表或基线时只能产生测试状态，不能作为正式 MSI 结论。
 - 数据库版本、下载日期、校验值和许可信息都应进入项目 provenance。

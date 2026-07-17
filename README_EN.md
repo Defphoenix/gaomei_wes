@@ -28,11 +28,20 @@ The project supports:
 - One-command project execution plus `step` and `from` debugging.
 - VEP 115 offline annotation and 8-15mer neoantigen peptide generation.
 - Optional MHCflurry/NetMHCpan binding prediction when HLA alleles are supplied.
-- Optional CNVkit, MSIsensor-pro, Manta, coverage, TMB, and summary modules.
+- Matched-normal/prebuilt-reference CNVkit analysis; mosdepth-only mode is
+  labeled depth QC and does not emit synthetic CNV calls.
+- Optional MSIsensor-pro, Manta, coverage, TMB, and summary modules.
+
+In matched mode, normal and tumor roles stop after preprocessing (`through 5d`).
+They do not produce independent VCFs. Their final BAMs are passed together to
+one paired Mutect2 run in the somatic role. Single-sample germline mode still
+uses HaplotypeCaller.
 
 It does not yet provide cohort joint genotyping, assay-calibrated CNV/MSI/TMB
 references, or a validated clinical interpretation report.
 See [the Chinese audit and roadmap](docs/pipeline_audit_zh.md) for details.
+The clean reinstall and matched-sample acceptance procedure is documented in
+[Chinese here](docs/clean_reinstall_revalidation_zh.md).
 
 ## Install With Mamba
 
@@ -43,9 +52,7 @@ cd gaomei_wes
 bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
-  --with-hla \
-  --with-hla-typing \
-  --with-cnv
+  --production
 ```
 
 Created environments:
@@ -61,7 +68,7 @@ Created environments:
 | `wes_sv_env` | Optional archived Manta 1.6.0; add `--with-sv` on Linux |
 
 The installer writes the resolved package list and platform-specific explicit
-lock files to `ENV_ROOT/manifests/`.
+lock files to `ENV_ROOT/manifests/`, then runs lightweight source regressions.
 
 After a future `git pull`, add `--update-existing` to apply changed YML files
 to existing prefixes. Without that flag, existing environments are left intact.
@@ -149,7 +156,7 @@ For a single germline sample, use `--mode single`, `--fastq-source`, and
   and are not downloaded automatically.
 - `simple` HLA scoring is an explicit smoke-test mode only. `auto` fails when
   neither NetMHCpan nor MHCflurry is available.
-- The mosdepth CNV fallback is a development estimate, not a replacement for a
-  calibrated CNVkit/FACETS workflow.
+- Mosdepth is used only for explicitly labeled depth QC. CNV calls require
+  CNVkit plus a matched-normal or pooled-normal reference.
 - MSI without a compatible site list/baseline is not a formal MSI call.
 - MultiQC is a QC aggregation report, not a clinical interpretation report.

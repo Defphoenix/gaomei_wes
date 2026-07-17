@@ -24,6 +24,11 @@ source "${SCRIPT_DIR}/utils.sh"
 main() {
     log_step "步骤13: MultiQC汇总报告 + 最终统计"
 
+    if [ "${SKIP_SUMMARY:-false}" = true ]; then
+        log_warn "跳过最终汇总报告 (SKIP_SUMMARY=true)"
+        return 0
+    fi
+
     mkdir -p "${DIR_SUMMARY}"
     mkdir -p "${DIR_MULTIQC}"
 
@@ -82,6 +87,7 @@ main() {
     {
         echo "=========================================================================="
         echo "           突变分析综合报告 - ${SAMPLE_ID}"
+        echo "           流程版本: ${PIPELINE_VERSION:-1.0.0}"
         echo "           生成时间: $(date '+%Y-%m-%d %H:%M:%S')"
         echo "=========================================================================="
         echo ""
@@ -208,13 +214,23 @@ main() {
         # HLA分型可来自当前样本，或肿瘤-正常项目中配置的normal样本结果。
         local hla_alleles_file="${HLA_TYPING_ALLELES_FILE:-${DIR_HLA_TYPING}/${SAMPLE_ID}_hla_binding_alleles.txt}"
         if [ -f "${hla_alleles_file}" ]; then
+            local hla_sample_id="${NORMAL_SAMPLE_ID:-${SAMPLE_ID}}"
+            local hla_full_file="$(dirname "${hla_alleles_file}")/${hla_sample_id}_hla_typing.tsv"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo "  [模块4a] HLA高分辨率分型"
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
             echo ""
             echo "  HLA-I binding兼容等位基因: $(cat "${hla_alleles_file}")"
             echo "  等位基因文件: ${hla_alleles_file}"
-            echo "  注: 完整G-group/多字段结果保存在normal样本hla_typing目录，不以两字段binding输入替代。"
+            if [ -f "${hla_full_file}" ]; then
+                local hla_i_count hla_ii_count hla_other_count
+                hla_i_count=$(awk -F '\t' 'NR>1 && $2 ~ /^(A|B|C)$/ {n++} END{print n+0}' "${hla_full_file}")
+                hla_ii_count=$(awk -F '\t' 'NR>1 && $2 ~ /^(DPA1|DPB1|DQA1|DQB1|DRA|DRB1|DRB3|DRB4|DRB5)$/ {n++} END{print n+0}' "${hla_full_file}")
+                hla_other_count=$(awk -F '\t' 'NR>1 && $2 !~ /^(A|B|C|DPA1|DPB1|DQA1|DQB1|DRA|DRB1|DRB3|DRB4|DRB5)$/ {n++} END{print n+0}' "${hla_full_file}")
+                echo "  完整G-group/多字段结果: ${hla_full_file}"
+                echo "  分型条目: HLA-I经典型=${hla_i_count}, HLA-II=${hla_ii_count}, 其他非经典位点=${hla_other_count}"
+            fi
+            echo "  注: 当前新抗原结合预测为HLA-I流程，仅使用A/B/C两字段等位基因；HLA-II分型保留在完整表中，未参与结合预测。"
             echo ""
         fi
 

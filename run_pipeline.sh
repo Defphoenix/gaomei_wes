@@ -12,7 +12,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${PROJECT_DIR}/config.sh"
 
 show_short_usage() {
-    echo "用法: bash run_pipeline.sh [--config FILE] [check|list|status|dry-run|step N|from N]"
+    echo "用法: bash run_pipeline.sh [--config FILE] [check|list|status|dry-run|step N|through N|from N]"
 }
 
 while [ $# -gt 0 ]; do
@@ -88,7 +88,7 @@ step_name() {
         7b) echo "SnpEff 功能注释" ;;
         7c) echo "VEP 功能注释" ;;
         7d) echo "新抗原候选肽生成与HLA结合预测" ;;
-        8) echo "CNV拷贝数分析 (CNVkit/mosdepth)" ;;
+        8) echo "CNV拷贝数分析 (CNVkit) / 深度QC (mosdepth)" ;;
         9) echo "MSI微卫星不稳定性检测 (MSIsensor-pro)" ;;
         10) echo "结构变异检测 (Manta)" ;;
         11) echo "覆盖度分析 (mosdepth/bedtools)" ;;
@@ -113,6 +113,7 @@ usage() {
     echo "  list              列出流程步骤"
     echo "  status [N]        查看关键输出，或查看单步输出"
     echo "  step <N>          只运行指定步骤，例如 7d"
+    echo "  through <N>       从步骤1运行到指定步骤，例如预处理 through 5d"
     echo "  from <N>          从指定步骤继续运行"
     echo "  dry-run           只检查，不执行分析"
     echo "  无命令            运行完整流程"
@@ -139,6 +140,7 @@ do_check() {
     log_step "环境检查"
 
     print_runtime_config
+    check_config_consistency || has_error=1
     check_core_tools || has_error=1
     check_analysis_tools || true
     check_reference || has_error=1
@@ -242,6 +244,37 @@ run_from_step() {
     print_finish "${PIPELINE_START_TIME}"
 }
 
+run_through_step() {
+    local end_id="$1"
+    local found=false
+    local step_id
+
+    print_banner
+    do_check || {
+        log_error "环境检查未通过"
+        return 1
+    }
+
+    for step_id in ${STEP_ORDER}; do
+        if ! run_step "${step_id}"; then
+            log_error "步骤 [${step_id}] ($(step_name "${step_id}")) 运行失败!"
+            return 1
+        fi
+        if [ "${step_id}" = "${end_id}" ]; then
+            found=true
+            break
+        fi
+    done
+
+    if [ "${found}" = false ]; then
+        log_error "未知结束步骤: ${end_id}"
+        list_steps
+        return 1
+    fi
+
+    print_finish "${PIPELINE_START_TIME}"
+}
+
 show_file_status() {
     local label="$1"
     local filepath="$2"
@@ -283,6 +316,7 @@ show_status() {
         8)
             show_file_status "CNV CNR" "${DIR_CNV}/${SAMPLE_ID}.cnr"
             show_file_status "CNV call" "${DIR_CNV}/${SAMPLE_ID}.call.cns"
+            show_file_status "Depth QC" "${DIR_CNV}/${SAMPLE_ID}.depth_qc.tsv"
             show_file_status "CNV summary" "${DIR_CNV}/${SAMPLE_ID}_cnv_summary.txt"
             ;;
         9)
@@ -309,6 +343,7 @@ show_status() {
             show_file_status "VEP VCF" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
             show_file_status "neo FASTA" "${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_peptides.fa"
             show_file_status "CNV call" "${DIR_CNV}/${SAMPLE_ID}.call.cns"
+            show_file_status "CNV depth QC" "${DIR_CNV}/${SAMPLE_ID}.depth_qc.tsv"
             show_file_status "MSI summary" "${DIR_MSI}/${SAMPLE_ID}_msi_summary.txt"
             show_file_status "TMB" "${DIR_TMB}/${SAMPLE_ID}_tmb_result.txt"
             show_file_status "summary" "${DIR_SUMMARY}/${SAMPLE_ID}_final_report.txt"
@@ -340,6 +375,14 @@ main() {
                 exit 1
             fi
             run_from_step "$2"
+            ;;
+        through)
+            if [ -z "${2:-}" ]; then
+                log_error "请指定结束步骤"
+                usage
+                exit 1
+            fi
+            run_through_step "$2"
             ;;
         list) list_steps ;;
         status) show_status "${2:-all}" ;;

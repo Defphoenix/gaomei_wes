@@ -55,8 +55,12 @@ main() {
 
     # 构建已知位点参数
     local known_sites_params="-known-sites ${DBSNP_VCF}"
-    if [ -n "${KNOWN_INDELS_VCF}" ] && [ -f "${KNOWN_INDELS_VCF}" ]; then
-        known_sites_params="${known_sites_params} -known-sites ${KNOWN_INDELS_VCF}"
+    local known_indels_vcf="${KNOWN_INDELS_VCF:-${MILLS_VCF:-}}"
+    if [ -n "${known_indels_vcf}" ] && [ -f "${known_indels_vcf}" ]; then
+        known_sites_params="${known_sites_params} -known-sites ${known_indels_vcf}"
+    fi
+    if [ -n "${THOUSAND_G_VCF:-}" ] && [ -f "${THOUSAND_G_VCF}" ]; then
+        known_sites_params="${known_sites_params} -known-sites ${THOUSAND_G_VCF}"
     fi
 
     #---------------------------------------

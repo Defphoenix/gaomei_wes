@@ -9,6 +9,19 @@ benchmark 和流程验证；正式临床或工业交付前仍需完成 PoN、CNV
 HLA*LA 分型和严格 VEP TMB，但仍须使用本实验体系验证。详细审计见
 [流程审计与更新路线](docs/pipeline_audit_zh.md)。首次部署或升级请先看
 [安装与版本更新指南](docs/install_update_zh.md)。
+从全新环境开始复测请使用
+[全新安装与真实配对样本复测手册](docs/clean_reinstall_revalidation_zh.md)。
+当前稳定研发版说明见 [v1.0版本说明](docs/V1.0_zh.md)，变更记录见
+[CHANGELOG](CHANGELOG.md)。
+
+### 真实配对样本回归状态
+
+2026-07 已完成一组真实 WES tumor-normal 数据的端到端研发验证。该次验证推动了
+以下修复，并已加入自动回归测试：BQSR BAM 完整性检查、Picard 3.4 参数兼容、
+VEP cache 路径校验、MSIsensor 原始结果与生成摘要隔离、Mutect2 正式下采样参数、
+CNVkit matched-normal 基线，以及可选的 bedtools 慢速交叉统计。PoN、gnomAD
+AF-only resource、同平台 CNV pooled reference 和经过 panel 验证的 MSI/TMB 阈值
+仍属于正式上线前必须补齐的队列资源。
 
 ## 流程总览
 
@@ -17,6 +30,17 @@ FASTQ → FastQC → 修剪 → BWA比对 → 排序索引 → 标记重复 → 
   → HLA*LA分型 → 变异检测 → 污染/方向偏倚校正 → SnpEff/VEP注释 → 新抗原候选肽
   → CNV分析 → MSI检测 → 结构变异 → 覆盖度分析 → TMB计算 → MultiQC汇总
 ```
+
+配对模式不会为两份 BAM 分别重复调用变异：
+
+```text
+Normal FASTQ -> Normal BQSR BAM -> HLA typing
+Tumor FASTQ  -> Tumor BQSR BAM
+Normal BQSR BAM + Tumor BQSR BAM -> 一次 paired Mutect2 -> 后续体细胞分析
+```
+
+生成的 `normal` 和 `tumor` 子命令由 `through 5d` 限定在预处理阶段；只有
+`somatic` 配置启用步骤6以后各模块。单样本胚系模式仍会运行 HaplotypeCaller。
 
 ## 分析模块 (共19步)
 
@@ -35,7 +59,7 @@ FASTQ → FastQC → 修剪 → BWA比对 → 排序索引 → 标记重复 → 
 | 7b | `07b_snpeff.sh` | SnpEff, SnpSift | 注释 | 功能注释；可选叠加ClinVar/COSMIC |
 | 7c | `07c_vep.sh` | Ensembl VEP | 注释 | 转录本后果、SIFT/PolyPhen、已知变异；CADD/REVEL需插件数据 |
 | 7d | `07d_neoantigen.sh` | Python, MHCflurry/NetMHCpan(可选) | 新抗原 | 从VEP注释VCF生成候选肽FASTA和HLA结合预测 |
-| 8 | `08_cnv.sh` | CNVkit / mosdepth | CNV | 拷贝数变异检测，CNVkit缺失时使用深度比例fallback |
+| 8 | `08_cnv.sh` | CNVkit / mosdepth | CNV | 有matched/pooled normal时运行CNVkit；否则仅输出明确标注的depth QC |
 | 9 | `09_msi.sh` | MSIsensor-pro | MSI | 微卫星不稳定性检测 |
 | 10 | `10_sv.sh` | Manta | SV | 结构变异 (缺失/插入/倒位/易位) |
 | 11 | `11_coverage.sh` | mosdepth, bedtools | 覆盖度 | 目标区域深度统计 |
@@ -125,9 +149,7 @@ git pull
 bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
-  --with-hla \
-  --with-hla-typing \
-  --with-cnv \
+  --production \
   --update-existing
 ```
 
@@ -137,9 +159,7 @@ bash scripts/create_conda_envs.sh \
 bash scripts/create_conda_envs.sh \
   --env-root /PUBLIC/gomics/guofenghua/envs/wes \
   --mamba-bin mamba \
-  --with-hla \
-  --with-hla-typing \
-  --with-cnv
+  --production
 ```
 
 上面的推荐命令会创建六个 prefix 环境:
@@ -155,7 +175,8 @@ wes_cnv_env            # CNVkit正式CNV分析环境，可选
 
 Manta 为归档的旧工具，Linux 服务器需要时再单独加 `--with-sv`。安装脚本会把
 实际解析到的精确包版本写入 `ENV_ROOT/manifests/`，因此 YML 保存安装需求，
-manifest 保存本次服务器安装的真实版本和 build。
+manifest 保存本次服务器安装的真实版本和 build。安装末尾还会自动执行
+`scripts/run_code_tests.sh`，验证 Shell/Python 语法、MSI 解析回归和 HLA 解析器。
 
 HLA*LA 软件环境不包含约 2.3GB 的 `PRG_MHC_GRCh38_withIMGT` 图压缩包。下载后运行：
 
@@ -362,7 +383,7 @@ bash run_pipeline.sh check
 | 工具 | 用途 | 安装 |
 |------|------|------|
 | CNVkit | CNV分析 | `conda install -c bioconda cnvkit` |
-| mosdepth | CNV fallback/覆盖度 | `conda install -c bioconda mosdepth` |
+| mosdepth | 覆盖度与探索性depth QC，不负责正式CNV calling | `conda install -c bioconda mosdepth` |
 | Manta | 结构变异 | 独立 `wes_sv_env.yml`；项目已归档，仅作兼容模块 |
 | MSIsensor-pro | MSI检测 | `conda install -c bioconda msisensor-pro` |
 | mosdepth | 覆盖度分析 | `conda install -c bioconda mosdepth` |
@@ -404,7 +425,8 @@ bash run_pipeline.sh check
 | 新抗原 | `neoantigen/*_neoantigen_peptides.tsv` | 每条候选肽的mer、蛋白坐标、野生型肽段和突变型肽段 |
 | 新抗原 | `neoantigen/*_neoantigen_manifest.tsv` | 兼容性manifest，包含候选肽来源、突变类型和跳过原因 |
 | HLA预测 | `neoantigen/*_hla_binding.tsv` | MHCflurry/NetMHCpan结合预测结果 |
-| CNV | `cnv/*.call.cns` | CNV调用结果 |
+| CNVkit | `cnv/*.cnr`, `*.cns`, `*.call.cns` | 仅在matched/pooled normal基线可用时生成 |
+| CNV depth QC | `cnv/*.depth_qc.tsv` | 无基线时的探索性深度异常，不是正式CNV调用 |
 | SV | `sv/*.diploidSV.vcf.gz` | 结构变异 |
 | MSI | `msi/*_msi_summary.txt` | MSI状态 |
 | 覆盖度 | `coverage/*_coverage_report.txt` | 覆盖度统计 |
@@ -414,6 +436,23 @@ bash run_pipeline.sh check
 | 汇总 | `multiqc/*_report.html` | MultiQC QC报告；不是完整临床解读报告 |
 
 ## 配置说明
+
+### 配置优先级
+
+编号分析脚本不直接使用项目生成器中的值。运行时按以下顺序加载：
+
+1. `pipeline/config.sh` 提供可移植的基础默认值。
+2. `configs/*.config.sh` 覆盖本次任务的样本、参考库、环境、输出和模块开关。
+3. `run_pipeline.sh --config FILE` 将同一个生效配置传给每个编号步骤。
+
+已生成的项目不会因为源仓库生成器更新而自动改写。继续旧项目时，
+应更新其 `pipeline/` 脚本并核对 `configs/` 中的实际生效值。运行前使用：
+
+```bash
+bash run_pipeline.sh check
+```
+
+`check` 会打印 BQSR/HLA/VEP/新抗原/CNV/MSI/TMB 的有效开关，并检查关键参考资源。
 
 ### 检测模式
 
@@ -442,6 +481,14 @@ RUN_SV=true         # 结构变异
 RUN_MSI=true        # MSI检测
 RUN_COVERAGE=true   # 覆盖度分析
 RUN_TMB=true        # TMB计算
+
+# CNV auto优先使用CNVkit + NORMAL_BAM/CNVKIT_REFERENCE；否则只输出depth_qc
+CNV_METHOD=auto
+CNV_REQUIRE_REFERENCE=false
+
+# mosdepth已覆盖常规深度统计，两个bedtools慢速交叉步骤默认关闭
+RUN_BEDTOOLS_COVERAGE=false
+RUN_BEDTOOLS_MULTICOV=false
 ```
 
 ### 新抗原模块
@@ -487,6 +534,9 @@ TOOL_NETMHCPAN="netMHCpan"
 模拟测试:
 
 ```bash
+# 无需conda或参考数据的轻量代码回归
+bash scripts/run_code_tests.sh
+
 bash run_pipeline.sh --config testdata/neoantigen/config_neoantigen_test.sh step 7d
 bash run_pipeline.sh --config testdata/neoantigen/config_neoantigen_test.sh status 7d
 

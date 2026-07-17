@@ -3,7 +3,10 @@
 
 set -euo pipefail
 
-SNPEFF_ENV="${SNPEFF_ENV:-${SNPEFF_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_snpeff_env}}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+DEFAULT_ENV_ROOT="${ENV_ROOT:-${PROJECT_DIR}/.conda_envs}"
+SNPEFF_ENV="${SNPEFF_ENV:-${SNPEFF_ENV_PREFIX:-${DEFAULT_ENV_ROOT}/wes_snpeff_env}}"
 SNPEFF_BIN="${SNPEFF_ENV}/bin/snpEff"
 
 if [ ! -x "${SNPEFF_BIN}" ] && [ -n "${MAIN_ENV_PREFIX:-}" ]; then

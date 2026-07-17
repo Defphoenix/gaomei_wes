@@ -44,7 +44,7 @@ filter_haplotypecaller() {
         -R "${REFERENCE_GENOME}" \
         -V "${snp_vcf}" \
         -O "${filtered_snp}" \
-        --filter-expression 'QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0' \
+        --filter-expression "${HC_SNP_QUAL_SCORE}" \
         --filter-name "SNP_FILTER"
 
     log_info "执行: InDel硬过滤"
@@ -52,7 +52,7 @@ filter_haplotypecaller() {
         -R "${REFERENCE_GENOME}" \
         -V "${indel_vcf}" \
         -O "${filtered_indel}" \
-        --filter-expression 'QD < 2.0 || FS > 200.0 || ReadPosRankSum < -20.0' \
+        --filter-expression "${HC_INDEL_QUAL_SCORE}" \
         --filter-name "INDEL_FILTER"
 
     # 3. 合并结果

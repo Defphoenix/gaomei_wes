@@ -22,13 +22,20 @@ dependencies:
   - bedtools
 
   # Variant calling and annotation
-  - gatk4
-  - picard
+  # Versions validated in the v1.0 real matched-WES regression.
+  - gatk4=4.6.2.0
+  - picard=3.4.0
 
   # Coverage, MSI, reporting, compression
-  - mosdepth
+  - mosdepth=0.3.14
   - msisensor-pro
   - multiqc
+  # GATK AnalyzeCovariates plotting dependencies
+  - r-base
+  - r-ggplot2
+  - r-gplots
+  - r-reshape
+  - r-gsalib
   - pigz
   - p7zip
   - pyyaml

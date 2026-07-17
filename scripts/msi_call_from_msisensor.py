@@ -33,7 +33,21 @@ def text_files(prefix: Path) -> list[Path]:
     parent = prefix.parent
     stem = prefix.name
     files = sorted(parent.glob(f"{stem}*"))
-    return [path for path in files if path.is_file() and path.stat().st_size < 20_000_000]
+    # Do not feed our own normalized outputs back into a later parse. Otherwise
+    # stale summaries can be mistaken for raw MSIsensor metrics (for example a
+    # sample ID such as SH05677 being parsed as an MSI score of 5677).
+    generated = {
+        f"{stem}_call.tsv",
+        f"{stem}_call_summary.txt",
+        f"{stem}_summary.txt",
+    }
+    return [
+        path
+        for path in files
+        if path.is_file()
+        and path.name not in generated
+        and path.stat().st_size < 20_000_000
+    ]
 
 
 def safe_read_lines(path: Path) -> list[str]:
@@ -60,13 +74,22 @@ def assign_metric(metrics: dict[str, float], key: str, value: Optional[float]) -
         metrics.setdefault("total_sites", value)
     elif key in {
         "number_of_somatic_sites",
+        "number_of_unstable_sites",
         "somatic_sites",
         "unstable_sites",
         "unstable",
         "somatic",
     }:
         metrics.setdefault("unstable_sites", value)
-    elif key in {"msi", "msi_score", "score", "percentage", "percent", "msi_percent"}:
+    elif key in {
+        "msi",
+        "msi_score",
+        "msi_score_percent",
+        "score",
+        "percentage",
+        "percent",
+        "msi_percent",
+    }:
         metrics.setdefault("msi_score", value)
 
 
@@ -94,6 +117,9 @@ def parse_metrics(files: list[Path]) -> dict[str, float | str]:
     unstable = metrics.get("unstable_sites")
     if "msi_score" not in metrics and isinstance(total, (int, float)) and total > 0 and isinstance(unstable, (int, float)):
         metrics["msi_score"] = unstable / total * 100
+    score = metrics.get("msi_score")
+    if isinstance(score, (int, float)) and not 0 <= score <= 100:
+        metrics.pop("msi_score", None)
     return metrics
 
 

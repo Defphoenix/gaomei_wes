@@ -53,7 +53,7 @@ main() {
             OUTPUT=${DIR_POSTQC}/${SAMPLE_ID}.insert_size_metrics \
             HISTOGRAM_FILE=${DIR_POSTQC}/${SAMPLE_ID}.insert_size_histogram.pdf \
             VALIDATION_STRINGENCY=LENIENT \
-            MINIMUM_PERCENTAGE=0.05
+            MINIMUM_PCT=0.05
 
         #---------------------------------------
         # 2. Picard CollectMultipleMetrics - 多种QC指标
@@ -95,27 +95,32 @@ main() {
     #---------------------------------------
     if command -v "${TOOL_PICARD}" &>/dev/null; then
         if [ -n "${INTERVAL_FILE}" ] && [ -f "${INTERVAL_FILE}" ]; then
+            local target_interval_list="${DIR_POSTQC}/${SAMPLE_ID}.targets.interval_list"
+            run_cmd "将捕获BED转换为Picard interval list" \
+                "${TOOL_PICARD} BedToIntervalList" \
+                INPUT=${INTERVAL_FILE} \
+                OUTPUT=${target_interval_list} \
+                SEQUENCE_DICTIONARY=${REFERENCE_DICT}
+
             run_cmd "收集外显子组覆盖指标 (HsMetrics)" \
                 "${TOOL_PICARD} CollectHsMetrics" \
                 INPUT=${input_bam} \
                 OUTPUT=${DIR_POSTQC}/${SAMPLE_ID}.hs_metrics.txt \
                 VALIDATION_STRINGENCY=LENIENT \
                 REFERENCE_SEQUENCE=${REFERENCE_GENOME} \
-                BAI_INTERVAL_FILE=${INTERVAL_FILE} \
-                TARGET_INTERVALS=${INTERVAL_FILE}
+                BAIT_INTERVALS=${target_interval_list} \
+                TARGET_INTERVALS=${target_interval_list}
+        else
+            # This branch is retained for WGS-compatible configurations only.
+            run_cmd "收集WGS覆盖指标" \
+                "${TOOL_PICARD} CollectWgsMetrics" \
+                INPUT=${input_bam} \
+                OUTPUT=${DIR_POSTQC}/${SAMPLE_ID}.wgs_metrics.txt \
+                VALIDATION_STRINGENCY=LENIENT \
+                REFERENCE_SEQUENCE=${REFERENCE_GENOME} \
+                MINIMUM_BASE_QUALITY=0 \
+                MINIMUM_MAPPING_QUALITY=0
         fi
-
-        #---------------------------------------
-        # 6. CollectWgsMetrics - 全基因组覆盖指标
-        #---------------------------------------
-        run_cmd "收集WGS覆盖指标" \
-            "${TOOL_PICARD} CollectWgsMetrics" \
-            INPUT=${input_bam} \
-            OUTPUT=${DIR_POSTQC}/${SAMPLE_ID}.wgs_metrics.txt \
-            VALIDATION_STRINGENCY=LENIENT \
-            REFERENCE_SEQUENCE=${REFERENCE_GENOME} \
-            MINIMUM_BASE_QUALITY=0 \
-            MINIMUM_MAPPING_QUALITY=0
     fi
 
     #---------------------------------------

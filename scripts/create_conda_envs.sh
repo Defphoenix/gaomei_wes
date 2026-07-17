@@ -16,6 +16,7 @@ FETCH_MHCFLURRY_MODELS="${FETCH_MHCFLURRY_MODELS:-false}"
 VERIFY_INSTALL="${VERIFY_INSTALL:-true}"
 WRITE_MANIFESTS="${WRITE_MANIFESTS:-true}"
 UPDATE_EXISTING="${UPDATE_EXISTING:-false}"
+RUN_CODE_TESTS="${RUN_CODE_TESTS:-true}"
 SOLVER_ARGS="${SOLVER_ARGS:---override-channels --channel-priority flexible}"
 CLEAN_INCOMPLETE="${CLEAN_INCOMPLETE:-false}"
 
@@ -33,14 +34,16 @@ Options:
   --with-hla-typing    Also create the Linux HLA*LA typing environment.
   --with-cnv           Also create the isolated CNVkit environment.
   --with-sv            Also create the isolated Manta environment (Linux only).
+  --production         Create HLA binding, HLA typing and CNVkit environments; excludes archived Manta.
   --all-optional       Create binding, HLA typing, CNVkit and Manta environments.
   --fetch-hla-models   After --with-hla, fetch MHCflurry class-I presentation models.
   --no-verify          Skip post-install tool checks.
   --no-manifests       Do not write resolved package/version manifests.
+  --no-code-tests      Skip lightweight source-code regression tests.
   -h, --help           Show this help.
 
 Examples:
-  bash scripts/create_conda_envs.sh --env-root /PUBLIC/envs/wes --with-hla --with-cnv
+  bash scripts/create_conda_envs.sh --env-root /PUBLIC/envs/wes --production
   bash scripts/create_conda_envs.sh --mamba-bin micromamba --all-optional --fetch-hla-models
 EOF
 }
@@ -56,10 +59,12 @@ while [ $# -gt 0 ]; do
         --with-hla-typing) CREATE_HLA_TYPING=true; shift ;;
         --with-cnv) CREATE_CNV=true; shift ;;
         --with-sv) CREATE_SV=true; shift ;;
+        --production) CREATE_HLA=true; CREATE_HLA_TYPING=true; CREATE_CNV=true; shift ;;
         --all-optional) CREATE_HLA=true; CREATE_HLA_TYPING=true; CREATE_CNV=true; CREATE_SV=true; shift ;;
         --fetch-hla-models) FETCH_MHCFLURRY_MODELS=true; CREATE_HLA=true; shift ;;
         --no-verify) VERIFY_INSTALL=false; shift ;;
         --no-manifests) WRITE_MANIFESTS=false; shift ;;
+        --no-code-tests) RUN_CODE_TESTS=false; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
@@ -266,6 +271,8 @@ if [ "${VERIFY_INSTALL}" = true ]; then
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "mosdepth" mosdepth --version
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "msisensor-pro" bash -c 'msisensor-pro 2>&1 | grep -qi msisensor'
     verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "multiqc" multiqc --version
+    verify_tool "${ENV_ROOT}/big_wes_pipeline_env" "GATK R packages" Rscript -e \
+        'invisible(lapply(c("gsalib", "ggplot2", "reshape", "gplots"), require, character.only=TRUE)); stopifnot(all(sapply(c("gsalib", "ggplot2", "reshape", "gplots"), requireNamespace, quietly=TRUE)))'
     verify_tool "${ENV_ROOT}/wes_vep_env" "vep" bash -c 'vep --help >/dev/null'
     verify_tool "${ENV_ROOT}/wes_snpeff_env" "snpeff" snpEff -version
     verify_tool "${ENV_ROOT}/wes_snpeff_env" "snpsift" bash -c \
@@ -278,10 +285,18 @@ if [ "${VERIFY_INSTALL}" = true ]; then
     fi
     if [ "${CREATE_CNV}" = true ]; then
         verify_tool "${ENV_ROOT}/wes_cnv_env" "cnvkit" cnvkit.py version
+        verify_tool "${ENV_ROOT}/wes_cnv_env" "CNVkit DNAcopy" Rscript -e \
+            'stopifnot(requireNamespace("DNAcopy", quietly=TRUE))'
     fi
     if [ "${CREATE_SV}" = true ]; then
         verify_tool "${ENV_ROOT}/wes_sv_env" "manta" configManta.py --help
     fi
+fi
+
+if [ "${RUN_CODE_TESTS}" = true ]; then
+    echo
+    echo "Running lightweight pipeline regression tests..."
+    bash "${PROJECT_DIR}/scripts/run_code_tests.sh"
 fi
 
 cat <<EOF

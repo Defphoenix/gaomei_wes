@@ -1,25 +1,22 @@
 #!/bin/bash
 #===============================================================================
-# config_test.sh - 测试用配置文件 (chr21小片段)
+# config.sh - WES流程基础配置
 #
-# 说明: 用于小规模测试的配置文件
-#       使用chr21:9000000-12000000区域 (3Mb) 进行测试
-#       下载完数据后，复制此文件覆盖config.sh即可测试
+# 说明: 编号分析步骤先加载本文件，再由项目 configs/*.config.sh
+#       覆盖本次任务的样本、参考库、环境、输出目录和运行开关。
 #
-# 用法:
-#   1. 先运行: bash prepare_data.sh all
-#   2. 复制:   cp config_test.sh config.sh
-#   3. 运行:   bash run_pipeline.sh check
-#   4. 运行:   bash run_pipeline.sh
+# 测试用轻量默认值请使用 config_test.sh。
 #===============================================================================
 
+PIPELINE_VERSION="${PIPELINE_VERSION:-1.0.0}"
+
 #---------------------------------------
-# 项目与样本 (测试用)
+# 项目与样本
 #---------------------------------------
-PROJECT_NAME="mutation_pipeline_test"
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SAMPLE_ID="test_sample"
-SAMPLE_TYPE="germline"                      # 测试用胚系样本
+PROJECT_NAME="${PROJECT_NAME:-wes_pipeline}"
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+SAMPLE_ID="${SAMPLE_ID:-sample}"
+SAMPLE_TYPE="${SAMPLE_TYPE:-germline}"
 ANALYSIS_MODE="${ANALYSIS_MODE:-single}"     # single / tumor_normal / multi
 
 NORMAL_SAMPLE_ID=""
@@ -28,33 +25,34 @@ TUMOR_SAMPLE_ID="${TUMOR_SAMPLE_ID:-${SAMPLE_ID}}"
 TUMOR_BAM="${TUMOR_BAM:-}"
 
 #---------------------------------------
-# 原始数据 (测试数据)
+# 原始数据
 #---------------------------------------
-RAW_DATA_DIR="/PUBLIC/gomics/guofenghua/ns_workflow/test-datasets-modules/data/genomics/homo_sapiens/illumina/fastq"
-FASTQ_R1="${RAW_DATA_DIR}/test_1.fastq.gz"
-FASTQ_R2="${RAW_DATA_DIR}/test_2.fastq.gz"
+RAW_DATA_DIR="${RAW_DATA_DIR:-${PROJECT_DIR}/data}"
+FASTQ_R1="${FASTQ_R1:-${RAW_DATA_DIR}/${SAMPLE_ID}_R1.fastq.gz}"
+FASTQ_R2="${FASTQ_R2:-${RAW_DATA_DIR}/${SAMPLE_ID}_R2.fastq.gz}"
 
 #---------------------------------------
-# 参考基因组 (本地下载路径)
+# 参考基因组
 #---------------------------------------
-REFERENCE_GENOME="${REFERENCE_GENOME:-/Users/mac/Documents/wes/reference_data/hg38/Homo_sapiens_assembly38.fasta}"
-REFERENCE_DICT="${REFERENCE_DICT:-/Users/mac/Documents/wes/reference_data/hg38/Homo_sapiens_assembly38.dict}"
+REFERENCE_DIR="${REFERENCE_DIR:-${PROJECT_DIR}/reference}"
+REFERENCE_GENOME="${REFERENCE_GENOME:-${REFERENCE_DIR}/hg38/Homo_sapiens_assembly38.fasta}"
+REFERENCE_DICT="${REFERENCE_DICT:-${REFERENCE_GENOME%.*}.dict}"
 REFERENCE_BWA_INDEX="${REFERENCE_BWA_INDEX:-${REFERENCE_GENOME}}"
 REFERENCE_GENOME_VERSION="hg38"
 
 #---------------------------------------
-# 数据库 (本地下载路径)
+# 数据库
 #---------------------------------------
-DBSNP_VCF="${DBSNP_VCF:-/Users/mac/Documents/wes/reference_data/dbsnp_146.hg38.vcf.gz}"
-DBSNP_VCF_INDEX="${DBSNP_VCF_INDEX:-/Users/mac/Documents/wes/reference_data/dbsnp_146.hg38.vcf.gz.tbi}"
-MILLS_VCF="${MILLS_VCF:-/Users/mac/Documents/wes/reference_data/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz}"
-THOUSAND_G_VCF="${THOUSAND_G_VCF:-/Users/mac/Documents/wes/reference_data/1000G_phase1.snps.high_confidence.hg38.vcf.gz}"
+DBSNP_VCF="${DBSNP_VCF:-${REFERENCE_DIR}/dbsnp_146.hg38.vcf.gz}"
+DBSNP_VCF_INDEX="${DBSNP_VCF_INDEX:-${DBSNP_VCF}.tbi}"
+MILLS_VCF="${MILLS_VCF:-${REFERENCE_DIR}/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz}"
+KNOWN_INDELS_VCF="${KNOWN_INDELS_VCF:-${MILLS_VCF}}"
+THOUSAND_G_VCF="${THOUSAND_G_VCF:-${REFERENCE_DIR}/1000G_phase1.snps.high_confidence.hg38.vcf.gz}"
 
 #---------------------------------------
-# 区间文件 (chr21测试区域)
+# 区间文件
 #---------------------------------------
-INTERVAL_FILE="/PUBLIC/gomics/guofenghua/ns_workflow/test-datasets-modules/data/genomics/homo_sapiens/genome/chr21/sequence/multi_intervals.bed"
-CNVKIT_TARGET_BED="/PUBLIC/gomics/guofenghua/ns_workflow/test-datasets-modules/data/genomics/homo_sapiens/genome/chr21/sequence/multi_intervals.bed"
+INTERVAL_FILE="${INTERVAL_FILE:-}"
 
 #---------------------------------------
 # SnpEff
@@ -67,7 +65,7 @@ SNPEFF_CONFIG="${PROJECT_DIR}/snpeff_db/snpEff.config"
 # VEP
 #---------------------------------------
 VEP_INPUT_VCF="${VEP_INPUT_VCF:-}"         # 留空时按 CALLER_MODE 自动选择过滤VCF
-VEP_CACHE_DIR="${VEP_CACHE_DIR:-/Users/mac/Documents/wes/reference_data/vep_cache}"
+VEP_CACHE_DIR="${VEP_CACHE_DIR:-${REFERENCE_DIR}/vep_cache}"
 VEP_SPECIES="homo_sapiens"
 VEP_ASSEMBLY="GRCh38"
 VEP_CACHE_VERSION="115"
@@ -77,12 +75,13 @@ VEP_FASTA="${VEP_FASTA:-${REFERENCE_GENOME}}"
 # CNVkit
 #---------------------------------------
 CNVKIT_REFERENCE=""
-CNVKIT_TARGET_BED="${PROJECT_DIR}/testdata/test_target.bed"
+CNVKIT_TARGET_BED="${CNVKIT_TARGET_BED:-${INTERVAL_FILE}}"
 CNVKIT_ANTITARGET_BED=""
-CNV_METHOD="auto"                         # auto/cnvkit/depth
+CNV_METHOD="auto"                         # auto/cnvkit/depth_qc；depth仅为旧别名
+CNV_REQUIRE_REFERENCE=false               # true时没有matched/pooled normal reference即终止
+CNVKIT_PROCESSES=2
 CNV_NEUTRAL_LOW=0.75
 CNV_NEUTRAL_HIGH=1.25
-CNVKIT_METHOD="hybrid"
 CNVKIT_SEGMENT_PARAMS=""
 CNVKIT_CALL_PARAMS=""
 
@@ -90,11 +89,11 @@ CNVKIT_CALL_PARAMS=""
 # MSIsensor-pro
 #---------------------------------------
 MSISENSOR2_LIST=""
-MSISENSOR_BASELINE=""
 MSISENSOR_MODE="auto"                     # auto/paired/tumor_only/smoke
 MSISENSOR_THREADS=2
+MSISENSOR_SCAN_REFERENCE=false             # true时由参考FASTA生成位点list
+MSISENSOR_TUMOR_ONLY_THRESHOLD=0.1
 MSI_MIN_LENGTH=10
-MSI_MIN_HOMOPOLYMER=1
 MSI_MIN_COVERAGE=15
 MSI_SMOKE_TEST=true                       # 无normal/baseline时生成可读summary，不冒充正式MSI结果
 MSI_STATUS_LOW_THRESHOLD=3                # MSI score低阈值: <3% 默认判为MSS
@@ -114,14 +113,15 @@ MANTA_THREADS=2
 #   3. ${VAR:-default} 写法允许在命令行或外层调度系统中临时覆盖。
 #---------------------------------------
 
-CONDA_BASE="${CONDA_BASE:-/Users/mac/anaconda3}"
-MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX:-${CONDA_BASE}/envs/big_wes_pipeline_env}"
-VEP_ENV_PREFIX="${VEP_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_vep_env}"
-SNPEFF_ENV_PREFIX="${SNPEFF_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_snpeff_env}"
-HLA_ENV_PREFIX="${HLA_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_hla_env}"
-HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_hla_typing_env}"
-CNV_ENV_PREFIX="${CNV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_cnv_env}"
-SV_ENV_PREFIX="${SV_ENV_PREFIX:-/Users/mac/Documents/wes/.conda_envs/wes_sv_env}"
+CONDA_BASE="${CONDA_BASE:-${HOME}/miniforge3}"
+ENV_ROOT="${ENV_ROOT:-${PROJECT_DIR}/.conda_envs}"
+MAIN_ENV_PREFIX="${MAIN_ENV_PREFIX:-${ENV_ROOT}/big_wes_pipeline_env}"
+VEP_ENV_PREFIX="${VEP_ENV_PREFIX:-${ENV_ROOT}/wes_vep_env}"
+SNPEFF_ENV_PREFIX="${SNPEFF_ENV_PREFIX:-${ENV_ROOT}/wes_snpeff_env}"
+HLA_ENV_PREFIX="${HLA_ENV_PREFIX:-${ENV_ROOT}/wes_hla_env}"
+HLA_TYPING_ENV_PREFIX="${HLA_TYPING_ENV_PREFIX:-${ENV_ROOT}/wes_hla_typing_env}"
+CNV_ENV_PREFIX="${CNV_ENV_PREFIX:-${ENV_ROOT}/wes_cnv_env}"
+SV_ENV_PREFIX="${SV_ENV_PREFIX:-${ENV_ROOT}/wes_sv_env}"
 
 PIPELINE_EXTRA_PATHS="${PIPELINE_EXTRA_PATHS:-${MAIN_ENV_PREFIX}/bin:${VEP_ENV_PREFIX}/bin:${HLA_ENV_PREFIX}/bin:${HLA_TYPING_ENV_PREFIX}/bin:${CNV_ENV_PREFIX}/bin:${SV_ENV_PREFIX}/bin}"
 export PATH="${PIPELINE_EXTRA_PATHS}:${PATH}"
@@ -153,8 +153,10 @@ TOOL_SNPSIFT="${TOOL_SNPSIFT:-${PROJECT_DIR}/scripts/run_snpsift_env.sh}"
 TOOL_VEP="${TOOL_VEP:-${PROJECT_DIR}/scripts/run_vep_env.sh}"
 TOOL_NETMHCPAN="${TOOL_NETMHCPAN:-netMHCpan}"
 TOOL_MHCFLURRY="${TOOL_MHCFLURRY:-mhcflurry-predict}"
+MHCFLURRY_DATA_DIR="${MHCFLURRY_DATA_DIR:-}" # 可选；为空时使用MHCflurry默认模型目录
+[ -z "${MHCFLURRY_DATA_DIR}" ] || export MHCFLURRY_DATA_DIR
 TOOL_HLA_LA="${TOOL_HLA_LA:-HLA-LA.pl}"
-TOOL_CNVKIT="${TOOL_CNVKIT:-cnvkit.py}"
+TOOL_CNVKIT="${TOOL_CNVKIT:-${PROJECT_DIR}/scripts/run_cnvkit_env.sh}"
 TOOL_MANTA="${TOOL_MANTA:-configManta.py}"
 TOOL_MSISENSOR2="${TOOL_MSISENSOR2:-msisensor-pro}"
 TOOL_MOSDEPTH="${TOOL_MOSDEPTH:-mosdepth}"
@@ -180,10 +182,7 @@ GATK_THREADS=2
 CALLER_MODE="haplotypecaller"
 
 PANEL_OF_NORMALS=""
-PON_INDEX=""
-MUTECT2_LEARNING_DATA=""
 GERMLINE_RESOURCE_VCF="${GERMLINE_RESOURCE_VCF:-}"
-GERMLINE_RESOURCE_INDEX="${GERMLINE_RESOURCE_INDEX:-}"
 MUTECT2_CONTAMINATION_TABLE="${MUTECT2_CONTAMINATION_TABLE:-}"
 MUTECT2_SEGMENTATION_TABLE="${MUTECT2_SEGMENTATION_TABLE:-}"
 MUTECT2_ORIENTATION_MODEL="${MUTECT2_ORIENTATION_MODEL:-}"
@@ -191,10 +190,11 @@ MUTECT2_COMMON_VARIANTS_VCF="${MUTECT2_COMMON_VARIANTS_VCF:-}"
 RUN_MUTECT2_ORIENTATION_MODEL=true        # 从Mutect2 F1R2计数学习方向偏倚模型
 RUN_MUTECT2_CONTAMINATION=true            # 使用common biallelic SNP估计肿瘤/正常污染
 MUTECT2_REQUIRE_AUXILIARY=false           # true时缺少F1R2/common SNP资源即终止
+MUTECT2_MAX_READS_PER_ALIGNMENT_START=50  # GATK正式默认值；低于此值会损失低VAF证据
 MUTECT2_EXTRA_PARAMS="${MUTECT2_EXTRA_PARAMS:-}"
 FILTER_MUTECT_EXTRA_PARAMS="${FILTER_MUTECT_EXTRA_PARAMS:-}"
 
-RUN_BQSR=false                            # 测试时可关闭BQSR加速
+RUN_BQSR=true                             # 正式分析默认启用；测试配置可关闭
 
 HC_SNP_QUAL_SCORE="QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0"
 HC_INDEL_QUAL_SCORE="QD < 2.0 || FS > 200.0 || ReadPosRankSum < -20.0"
@@ -214,6 +214,7 @@ HLA_TYPING_REQUIRED=false                # 生产项目可设true，缺少工具
 HLA_TYPING_BAM=""                        # 留空时自动使用当前样本最终BAM
 HLA_LA_GRAPH_DIR="${HLA_LA_GRAPH_DIR:-${PROJECT_DIR}/reference/hla/PRG_MHC_GRCh38_withIMGT}"
 HLA_LA_GRAPH_NAME="PRG_MHC_GRCh38_withIMGT"
+HLA_LA_INSTALL_ROOT=""                   # 留空时使用 HLA_TYPING_ENV_PREFIX/opt/hla-la
 HLA_TYPING_THREADS=4
 HLA_TYPING_ALLELES_FILE=""               # somatic项目通常指向normal分型结果
 
@@ -234,7 +235,10 @@ RUN_MSI=false                             # 测试时可关闭MSI
 RUN_COVERAGE=true
 MOSDEPTH_THREADS=2
 COVERAGE_TARGETS="10,30,50,100"
+RUN_BEDTOOLS_COVERAGE=false               # mosdepth已提供区域深度；需要交叉验证时开启
+RUN_BEDTOOLS_MULTICOV=false               # WES BED上非常慢，默认关闭
 RUN_TMB=true
+TMB_VEP_VCF=""                            # 留空时使用当前样本VEP VCF
 TMB_CODING_SIZE=3                         # 测试区域约3Mb
 TMB_EFFECTIVE_CODING_BED=""               # 推荐: capture BED与CDS外显子求交并合并后的BED
 TMB_DENOMINATOR_VALIDATED=false           # 完成panel TMB方法学验证后才可设true
@@ -281,7 +285,7 @@ SKIP_ALIGN=false
 SKIP_SORT=false
 SKIP_MARKDUP=false
 SKIP_POSTQC=false
-SKIP_BQSR=true                            # 测试跳过BQSR
+SKIP_BQSR=false                           # 正式分析默认执行BQSR
 SKIP_VARIANT_CALLING=false
 SKIP_VARIANT_FILTER=false
 SKIP_SNPEFF=true                          # 测试先跳过注释
@@ -294,5 +298,3 @@ SKIP_COVERAGE=false
 SKIP_TMB=false
 SKIP_SUMMARY=false
 SKIP_MULTIQC=true                         # 测试跳过MultiQC
-
-CLEAN_INTERMEDIATE=false

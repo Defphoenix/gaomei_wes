@@ -90,7 +90,7 @@ run_mutect2() {
     fi
 
     local normal_param=""
-    if [ -n "${NORMAL_BAM:-}" ] && [ -f "${NORMAL_BAM:-}" ]; then
+    if [ -n "${NORMAL_BAM:-}" ] && bam_is_complete "${NORMAL_BAM}"; then
         check_file "配对Normal BAM" "${NORMAL_BAM}" || return 1
         if [ ! -f "${NORMAL_BAM}.bai" ]; then
             log_info "未检测到Normal BAM索引，正在使用 samtools index 补齐..."
@@ -107,6 +107,16 @@ run_mutect2() {
         log_warn "未配置配对Normal BAM，Mutect2将以tumor-only模式运行"
     fi
 
+    local max_reads_param=""
+    if [ -n "${MUTECT2_MAX_READS_PER_ALIGNMENT_START:-}" ]; then
+        if [[ ! "${MUTECT2_MAX_READS_PER_ALIGNMENT_START}" =~ ^[0-9]+$ ]]; then
+            log_error "MUTECT2_MAX_READS_PER_ALIGNMENT_START必须为非负整数: ${MUTECT2_MAX_READS_PER_ALIGNMENT_START}"
+            return 1
+        fi
+        max_reads_param="--max-reads-per-alignment-start ${MUTECT2_MAX_READS_PER_ALIGNMENT_START}"
+        log_info "Mutect2每个alignment-start最大reads: ${MUTECT2_MAX_READS_PER_ALIGNMENT_START}"
+    fi
+
     # GATK Mutect2
     # 体细胞突变检测，适用于肿瘤样本
     # 如果有配对正常样本，可用 -I normal 指定
@@ -120,7 +130,7 @@ run_mutect2() {
         ${interval_param} \
         ${pon_param} \
         ${germline_param} \
-        --max-reads-per-alignment-start 5 \
+        ${max_reads_param} \
         --minimum-mapping-quality 30 \
         --native-pair-hmm-threads ${GATK_THREADS} \
         ${MUTECT2_EXTRA_PARAMS:-} \
@@ -150,17 +160,17 @@ main() {
 
     # 确定输入BAM (优先使用去重后的BAM)
     local input_bam
-    if [ -n "${TUMOR_BAM:-}" ] && [ -f "${TUMOR_BAM:-}" ]; then
+    if [ -n "${TUMOR_BAM:-}" ] && bam_is_complete "${TUMOR_BAM}"; then
         input_bam="${TUMOR_BAM}"
         log_info "使用配置指定的Tumor BAM: ${input_bam}"
-    elif [ -f "${DIR_ALIGNED}/${SAMPLE_ID}.dedup.bam" ]; then
+    elif bam_is_complete "${DIR_ALIGNED}/${SAMPLE_ID}.dedup.bam"; then
         input_bam="${DIR_ALIGNED}/${SAMPLE_ID}.dedup.bam"
         log_info "使用去重后BAM: ${input_bam}"
-    elif [ -f "${DIR_ALIGNED}/${SAMPLE_ID}.sorted.bam" ]; then
+    elif bam_is_complete "${DIR_ALIGNED}/${SAMPLE_ID}.sorted.bam"; then
         input_bam="${DIR_ALIGNED}/${SAMPLE_ID}.sorted.bam"
         log_info "使用排序BAM (未去重): ${input_bam}"
     else
-        log_error "未找到输入BAM文件!"
+        log_error "未找到完整且通过samtools quickcheck的输入BAM文件!"
         return 1
     fi
 

@@ -65,6 +65,7 @@ main() {
         -stats "${snpeff_report}" \
         -gene "${snpeff_genes}" \
         -canon \
+        ${SNPEFF_EXTRA_PARAMS:-} \
         ${SNPEFF_DB} \
         "${input_vcf}" \
         | "${TOOL_BGZIP:-bgzip}" > "${snpeff_vcf}" || \
@@ -72,6 +73,7 @@ main() {
         "${TOOL_SNPEFF}" ann \
         -v \
         -dataDir ${SNPEFF_DATA_DIR} \
+        ${SNPEFF_EXTRA_PARAMS:-} \
         ${SNPEFF_DB} \
         "${input_vcf}" \
         > "${DIR_ANNOTATION}/${SAMPLE_ID}.snpeff.vcf"

@@ -38,8 +38,9 @@ flowchart TD
     M --> F[Orientation + contamination + filtering]
     F --> PASS[Somatic PASS VCF]
     PASS --> VEP[VEP 115 offline annotation]
-    VEP --> NEO[8-15mer neoantigen + HLA binding]
-    VEP --> TMB[Strict TMB]
+    VEP --> MF[VEP后人工阈值过滤]
+    MF --> NEO[8-15mer neoantigen + HLA binding]
+    MF --> TMB[Strict consequence TMB]
     NB --> MSI[Paired MSI]
     TB --> MSI
     NB --> CNV[CNVkit matched-normal]
@@ -64,7 +65,7 @@ HaplotypeCaller。
 | FASTQ QC与修剪 | FastQC、fastp | QC HTML/JSON、clean FASTQ |
 | 比对和校准 | BWA、Samtools、Picard、GATK BQSR | dedup/BQSR BAM、QC指标 |
 | 体细胞变异 | Mutect2、FilterMutectCalls | raw、filtered、PASS VCF |
-| 功能注释 | VEP 115、可选SnpEff | VEP VCF/TSV、注释统计 |
+| 功能注释与人工筛选 | VEP 115、Python、BCFtools | VEP VCF、过滤VCF、逐位点审计TSV |
 | HLA和新抗原 | HLA*LA、MHCflurry/NetMHCpan | HLA分型、8-15mer FASTA、binding表 |
 | CNV | CNVkit | CNR/CNS/call；无基线时仅depth QC |
 | MSI | MSIsensor-pro | score、unstable/total、分型 |

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Mutect2和FilterMutectCalls在capture BED两侧默认增加100 bp局部组装上下文。
+- 新增VEP后可审计人工硬过滤步骤7e，输出过滤VCF、逐位点TSV和参数JSON。
+- 默认阈值为TLOD 6.3、tumor DP 20、tumor ALT 5、tumor AF 2%、normal DP 20、
+  normal ALT 2、normal AF 2%、群体最大AF 0.1%；群体AF缺失按通过处理。
+- 新抗原和TMB默认读取人工过滤后的VEP VCF；TMB继续独立执行consequence和分母筛选。
+
 ## v1.0.0 - 2026-07-17
 
 首个完整研发版，支持单样本胚系和 tumor-normal 配对 WES。主要能力：

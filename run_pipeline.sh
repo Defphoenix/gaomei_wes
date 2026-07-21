@@ -46,7 +46,7 @@ source "${CONFIG_FILE}"
 source "${PROJECT_DIR}/scripts/utils.sh"
 
 PIPELINE_START_TIME=$(date +%s)
-STEP_ORDER="1 2 3 4 5 5b 5c 5d 6 7 7b 7c 7d 8 9 10 11 12 13"
+STEP_ORDER="1 2 3 4 5 5b 5c 5d 6 7 7b 7c 7e 7d 8 9 10 11 12 13"
 
 step_script() {
     case "$1" in
@@ -62,6 +62,7 @@ step_script() {
         7) echo "07_variant_filter.sh" ;;
         7b) echo "07b_snpeff.sh" ;;
         7c) echo "07c_vep.sh" ;;
+        7e) echo "07e_manual_filter.sh" ;;
         7d) echo "07d_neoantigen.sh" ;;
         8) echo "08_cnv.sh" ;;
         9) echo "09_msi.sh" ;;
@@ -87,6 +88,7 @@ step_name() {
         7) echo "变异过滤" ;;
         7b) echo "SnpEff 功能注释" ;;
         7c) echo "VEP 功能注释" ;;
+        7e) echo "VEP后人工体细胞硬过滤" ;;
         7d) echo "新抗原候选肽生成与HLA结合预测" ;;
         8) echo "CNV拷贝数分析 (CNVkit) / 深度QC (mosdepth)" ;;
         9) echo "MSI微卫星不稳定性检测 (MSIsensor-pro)" ;;
@@ -313,6 +315,11 @@ show_status() {
             show_file_status "VEP VCF" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
             show_file_status "VEP TSV" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.tsv"
             ;;
+        7e)
+            show_file_status "人工过滤VEP VCF" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filtered.vcf.gz"
+            show_file_status "人工过滤审计表" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filter_audit.tsv"
+            show_file_status "人工过滤摘要" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filter_summary.json"
+            ;;
         8)
             show_file_status "CNV CNR" "${DIR_CNV}/${SAMPLE_ID}.cnr"
             show_file_status "CNV call" "${DIR_CNV}/${SAMPLE_ID}.call.cns"
@@ -341,6 +348,7 @@ show_status() {
             show_file_status "Mutect2 PASS" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.pass.vcf.gz"
             show_file_status "Contamination" "${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.contamination.table"
             show_file_status "VEP VCF" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
+            show_file_status "人工过滤VEP VCF" "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filtered.vcf.gz"
             show_file_status "neo FASTA" "${DIR_NEOANTIGEN}/${SAMPLE_ID}_neoantigen_peptides.fa"
             show_file_status "CNV call" "${DIR_CNV}/${SAMPLE_ID}.call.cns"
             show_file_status "CNV depth QC" "${DIR_CNV}/${SAMPLE_ID}.depth_qc.tsv"
@@ -349,7 +357,7 @@ show_status() {
             show_file_status "summary" "${DIR_SUMMARY}/${SAMPLE_ID}_final_report.txt"
             ;;
         *)
-            log_warn "目前 status 内置 all、5d、6、7、7c、7d、8、9、12；步骤 ${step_id} 可直接检查对应结果目录"
+            log_warn "目前 status 内置 all、5d、6、7、7c、7e、7d、8、9、12；步骤 ${step_id} 可直接检查对应结果目录"
             ;;
     esac
 }

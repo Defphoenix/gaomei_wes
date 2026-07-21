@@ -397,6 +397,7 @@ RUN_MUTECT2_ORIENTATION_MODEL=true
 RUN_MUTECT2_CONTAMINATION=true
 MUTECT2_REQUIRE_AUXILIARY="${MUTECT2_AUX_REQUIRED}"
 MUTECT2_MAX_READS_PER_ALIGNMENT_START=50
+MUTECT2_INTERVAL_PADDING=100
 VEP_FASTA="\${REFERENCE_GENOME}"
 NEOANTIGEN_ANNOVAR_TXT=""
 NEOANTIGEN_PROTEIN_FASTA="${REFERENCE_DIR}/protein/protein.fa"
@@ -523,7 +524,17 @@ RUN_MUTECT2_ORIENTATION_MODEL=true
 RUN_MUTECT2_CONTAMINATION=true
 MUTECT2_REQUIRE_AUXILIARY="${MUTECT2_AUX_REQUIRED}"
 MUTECT2_MAX_READS_PER_ALIGNMENT_START=50
+MUTECT2_INTERVAL_PADDING=100
 VEP_FASTA="\${REFERENCE_GENOME}"
+MANUAL_FILTER_MIN_TLOD=6.3
+MANUAL_FILTER_MIN_TUMOR_DP=20
+MANUAL_FILTER_MIN_TUMOR_ALT_READS=5
+MANUAL_FILTER_MIN_TUMOR_AF=0.02
+MANUAL_FILTER_MIN_NORMAL_DP=20
+MANUAL_FILTER_MAX_NORMAL_ALT_READS=2
+MANUAL_FILTER_MAX_NORMAL_AF=0.02
+MANUAL_FILTER_MAX_POPULATION_AF=0.001
+MANUAL_FILTER_POPULATION_AF_FIELDS="MAX_AF,gnomADe_AF,gnomADg_AF,AF"
 NEOANTIGEN_ANNOVAR_TXT=""
 NEOANTIGEN_PROTEIN_FASTA="${REFERENCE_DIR}/protein/protein.fa"
 NEOANTIGEN_PEPTIDE_LENGTHS="8-15"
@@ -565,6 +576,7 @@ CALLER_MODE="mutect2"
 RUN_BQSR=false
 RUN_SNPEFF=false
 RUN_VEP=true
+RUN_MANUAL_FILTER=true
 RUN_NEOANTIGEN=true
 RUN_HLA_BINDING="auto"
 HLA_BINDING_TOOL="auto"
@@ -585,6 +597,7 @@ SKIP_VARIANT_CALLING=false
 SKIP_VARIANT_FILTER=false
 SKIP_SNPEFF=true
 SKIP_VEP=false
+SKIP_MANUAL_FILTER=false
 SKIP_NEOANTIGEN=false
 SKIP_CNV=false
 SKIP_SV=true
@@ -610,7 +623,7 @@ Usage: bash \$(basename "\$0") [all|all-core|normal|normal5|tumor|tumor5|somatic
   normal5        Re-run normal step 5 only.
   tumor          Run tumor preprocessing only: steps 1-5d; no variant calling.
   tumor5         Re-run tumor step 5 only.
-  somatic        Run full somatic steps only: Mutect2/filter/VEP/neoantigen/CNV/MSI/coverage/TMB/summary.
+  somatic        Run full somatic steps only: Mutect2/filter/VEP/manual-filter/neoantigen/CNV/MSI/coverage/TMB/summary.
   somatic-core   Run core somatic steps only: Mutect2/filter/coverage.
   from-normal5   Re-run normal step 5, then tumor alignment and full somatic steps.
   from-tumor     Run tumor alignment and full somatic steps.
@@ -726,7 +739,7 @@ usage() {
 Usage: bash run_pipeline.sh [all-core|all|full|normal|tumor|somatic-core|somatic|check|status|list|step ROLE N|through ROLE N|from ROLE N]
 
 Default:
-  bash run_pipeline.sh              Run full: normal + tumor + Mutect2/filter/VEP/neoantigen/CNV/MSI/coverage/TMB/summary.
+  bash run_pipeline.sh              Run full: normal + tumor + Mutect2/filter/VEP/manual-filter/neoantigen/CNV/MSI/coverage/TMB/summary.
 
 Project modes:
   all-core                          Run normal, tumor, then core somatic analysis.
@@ -868,6 +881,8 @@ Somatic outputs:
 ${SOMATIC_RESULT_DIR}/variants/${PAIR_ID}.mutect2.filtered.vcf.gz
 ${SOMATIC_RESULT_DIR}/variants/${PAIR_ID}.mutect2.pass.vcf.gz
 ${SOMATIC_RESULT_DIR}/annotation/${PAIR_ID}.vep.vcf.gz
+${SOMATIC_RESULT_DIR}/annotation/${PAIR_ID}.vep.manual_filtered.vcf.gz
+${SOMATIC_RESULT_DIR}/annotation/${PAIR_ID}.vep.manual_filter_audit.tsv
 \`\`\`
 EOF
 

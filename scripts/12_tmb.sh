@@ -15,7 +15,16 @@ main() {
         return 0
     fi
 
-    local input_vcf="${TMB_VEP_VCF:-${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz}"
+    local input_vcf="${TMB_VEP_VCF:-}"
+    if [ -z "${input_vcf}" ]; then
+        if [ "${RUN_MANUAL_FILTER:-true}" = true ] && [ "${SKIP_MANUAL_FILTER:-false}" = false ] && \
+           [ -f "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filtered.vcf.gz" ]; then
+            input_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filtered.vcf.gz"
+            log_info "TMB使用人工过滤后的VEP VCF；仍会继续执行consequence与有效编码区筛选"
+        else
+            input_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
+        fi
+    fi
     local coding_bed="${TMB_EFFECTIVE_CODING_BED:-}"
     local accepted="${DIR_TMB}/${SAMPLE_ID}_tmb_accepted_variants.tsv"
     local rejected="${DIR_TMB}/${SAMPLE_ID}_tmb_rejected_variants.tsv"
@@ -53,8 +62,8 @@ main() {
         --min-tlod "${TMB_MIN_TLOD:-6.3}" \
         --min-tumor-dp "${TMB_MIN_TUMOR_DP:-20}" \
         --min-tumor-alt-reads "${TMB_MIN_TUMOR_ALT_READS:-5}" \
-        --min-tumor-af "${TMB_MIN_AF:-0.05}" \
-        --min-normal-dp "${TMB_MIN_NORMAL_DP:-10}" \
+        --min-tumor-af "${TMB_MIN_AF:-0.02}" \
+        --min-normal-dp "${TMB_MIN_NORMAL_DP:-20}" \
         --max-normal-alt-reads "${TMB_MAX_NORMAL_ALT_READS:-2}" \
         --max-normal-af "${TMB_MAX_NORMAL_AF:-0.02}" \
         --max-population-af "${TMB_MAX_POPULATION_AF:-0.001}" \

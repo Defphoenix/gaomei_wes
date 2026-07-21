@@ -1,0 +1,18 @@
+##fileformat=VCFv4.2
+##INFO=<ID=TLOD,Number=A,Type=Float,Description="Tumor log odds">
+##INFO=<ID=CSQ,Number=.,Type=String,Description="Consequence annotations from Ensembl VEP. Format: Allele|Consequence|SYMBOL|Feature|HGVSc|HGVSp|CANONICAL|MANE_SELECT|MAX_AF|gnomADe_AF|gnomADg_AF|AF">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+##FORMAT=<ID=AF,Number=A,Type=Float,Description="Allele fraction">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	tumor01	normal01
+chr1	101	.	A	T	.	PASS	TLOD=6.3;CSQ=T|missense_variant|PASS_MISSING_AF|ENST1|ENST1:c.1A>T|ENSP1:p.K1N|YES||||	GT:AD:AF:DP	0/1:15,5:0.02:20	0/0:20,0:0.00:20
+chr1	102	.	G	C	.	PASS	TLOD=12;CSQ=C|missense_variant|PASS_POP_AF|ENST2|ENST2:c.2G>C|ENSP2:p.A2P|YES||0.001|||	GT:AD:AF:DP	0/1:30,8:0.20:38	0/0:28,2:0.02:30
+chr1	103	.	C	T	.	PASS	TLOD=6.29;CSQ=T|missense_variant|FAIL_TLOD|ENST3|ENST3:c.3C>T|ENSP3:p.A3V|YES||||	GT:AD:AF:DP	0/1:30,8:0.20:38	0/0:30,0:0.00:30
+chr1	104	.	C	A	.	PASS	TLOD=12;CSQ=A|missense_variant|FAIL_TDP|ENST4|ENST4:c.4C>A|ENSP4:p.A4D|YES||||	GT:AD:AF:DP	0/1:14,5:0.26:19	0/0:30,0:0.00:30
+chr1	105	.	T	G	.	PASS	TLOD=12;CSQ=G|missense_variant|FAIL_TALT|ENST5|ENST5:c.5T>G|ENSP5:p.A5G|YES||||	GT:AD:AF:DP	0/1:30,4:0.12:34	0/0:30,0:0.00:30
+chr1	106	.	A	G	.	PASS	TLOD=12;CSQ=G|missense_variant|FAIL_TAF|ENST6|ENST6:c.6A>G|ENSP6:p.A6G|YES||||	GT:AD:AF:DP	0/1:95,5:0.019:100	0/0:30,0:0.00:30
+chr1	107	.	G	A	.	PASS	TLOD=12;CSQ=A|missense_variant|FAIL_NDP|ENST7|ENST7:c.7G>A|ENSP7:p.A7T|YES||||	GT:AD:AF:DP	0/1:30,8:0.20:38	0/0:19,0:0.00:19
+chr1	108	.	G	T	.	PASS	TLOD=12;CSQ=T|missense_variant|FAIL_NALT|ENST8|ENST8:c.8G>T|ENSP8:p.A8S|YES||||	GT:AD:AF:DP	0/1:30,8:0.20:38	0/0:27,3:0.02:30
+chr1	109	.	T	C	.	PASS	TLOD=12;CSQ=C|missense_variant|FAIL_NAF|ENST9|ENST9:c.9T>C|ENSP9:p.A9T|YES||||	GT:AD:AF:DP	0/1:30,8:0.20:38	0/0:30,0:0.021:30
+chr1	110	.	A	C	.	PASS	TLOD=12;CSQ=C|missense_variant|FAIL_POP|ENST10|ENST10:c.10A>C|ENSP10:p.A10P|YES||0.0011|||	GT:AD:AF:DP	0/1:30,8:0.20:38	0/0:30,0:0.00:30

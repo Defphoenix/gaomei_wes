@@ -39,3 +39,5 @@ dependencies:
   - pigz
   - p7zip
   - pyyaml
+  - pandas
+  - openpyxl

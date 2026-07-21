@@ -195,8 +195,19 @@ main() {
         # 注释结果
         local snpeff_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.snpeff.vcf.gz"
         local vep_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
+        local manual_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filtered.vcf.gz"
+        local manual_audit="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filter_audit.tsv"
+        local manual_summary="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filter_summary.json"
         [ -f "${snpeff_vcf}" ] && echo "  SnpEff注释: ${snpeff_vcf}"
         [ -f "${vep_vcf}" ] && echo "  VEP注释: ${vep_vcf}"
+        if [ -f "${manual_vcf}" ]; then
+            local manual_count
+            manual_count=$(${TOOL_BCFTOOLS} view -H "${manual_vcf}" 2>/dev/null | wc -l || echo "N/A")
+            echo "  VEP后人工硬过滤通过数: ${manual_count}"
+            echo "  人工过滤VCF: ${manual_vcf}"
+            [ -f "${manual_audit}" ] && echo "  逐位点过滤审计表: ${manual_audit}"
+            [ -f "${manual_summary}" ] && echo "  过滤参数与计数: ${manual_summary}"
+        fi
         if [ "${CALLER_MODE}" = "mutect2" ] || [ "${CALLER_MODE}" = "mt2" ]; then
             local orientation_model="${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.read-orientation-model.tar.gz"
             local contamination_table="${DIR_VARIANTS}/${SAMPLE_ID}.mutect2.contamination.table"

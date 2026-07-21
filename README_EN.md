@@ -48,8 +48,9 @@ flowchart LR
     TP --> M2
     M2 --> VF[Contamination / Orientation / Filter]
     VF --> VEP[VEP annotation]
-    VEP --> NEO[Neoantigen / HLA binding]
-    VEP --> TMB[Strict TMB]
+    VEP --> MF[Auditable manual threshold filter]
+    MF --> NEO[Neoantigen / HLA binding]
+    MF --> TMB[Strict consequence TMB]
     TP --> OTHER[CNV / MSI / SV / Coverage]
     HLA --> REPORT[Chinese HTML report]
     NEO --> REPORT
@@ -64,6 +65,8 @@ The project supports:
 - Mutect2 orientation-bias modeling and paired contamination estimation.
 - Optional HLA*LA G-group typing with separate two-field class-I binding alleles.
 - Strict VEP-CSQ TMB filtering with auditable accepted/rejected tables.
+- A post-VEP manual threshold step with a filtered VCF, per-variant audit TSV,
+  and JSON summary; downstream neoantigen and TMB modules prefer this VCF.
 - One-command project execution plus `step` and `from` debugging.
 - VEP 115 offline annotation and 8-15mer neoantigen peptide generation.
 - Optional MHCflurry/NetMHCpan binding prediction when HLA alleles are supplied.
@@ -81,6 +84,12 @@ references, or a validated clinical interpretation report.
 See [the Chinese audit and roadmap](docs/pipeline_audit_zh.md) for details.
 The clean reinstall and matched-sample acceptance procedure is documented in
 [Chinese here](docs/clean_reinstall_revalidation_zh.md).
+
+The paired Mutect2 workflow uses `MUTECT2_INTERVAL_PADDING=100` to provide
+local-assembly context around capture intervals. This does not modify the
+capture BED or TMB denominator. The default post-VEP thresholds are TLOD 6.3,
+tumor DP 20, tumor ALT reads 5, tumor AF 2%, normal DP 20, normal ALT reads 2,
+normal AF 2%, and maximum population AF 0.1%; missing population AF passes.
 
 ## Install With Mamba
 

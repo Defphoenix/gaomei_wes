@@ -70,10 +70,19 @@ run_mutect2() {
 
     # 构建区间参数 (使用 :- 语法防止变量未定义报错)
     local interval_param=""
+    local interval_padding_param=""
     if [ -n "${INTERVAL_LIST:-}" ] && [ -f "${INTERVAL_LIST:-}" ]; then
         interval_param="-L ${INTERVAL_LIST}"
     elif [ -n "${INTERVAL_FILE:-}" ] && [ -f "${INTERVAL_FILE:-}" ]; then
         interval_param="-L ${INTERVAL_FILE}"
+    fi
+    if [ -n "${interval_param}" ]; then
+        if [[ ! "${MUTECT2_INTERVAL_PADDING:-100}" =~ ^[0-9]+$ ]]; then
+            log_error "MUTECT2_INTERVAL_PADDING必须为非负整数: ${MUTECT2_INTERVAL_PADDING:-}"
+            return 1
+        fi
+        interval_padding_param="--interval-padding ${MUTECT2_INTERVAL_PADDING:-100}"
+        log_info "Mutect2调用区间两侧padding: ${MUTECT2_INTERVAL_PADDING:-100} bp"
     fi
 
     # Panel of Normals (可选，提高特异性)
@@ -128,6 +137,7 @@ run_mutect2() {
         -O "${output_vcf}" \
         --f1r2-tar-gz "${f1r2_tar}" \
         ${interval_param} \
+        ${interval_padding_param} \
         ${pon_param} \
         ${germline_param} \
         ${max_reads_param} \

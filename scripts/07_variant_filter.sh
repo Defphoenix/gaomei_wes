@@ -236,10 +236,18 @@ filter_mutect2() {
     fi
 
     local interval_param=""
+    local interval_padding_param=""
     if [ -n "${INTERVAL_LIST:-}" ] && [ -f "${INTERVAL_LIST:-}" ]; then
         interval_param="-L ${INTERVAL_LIST}"
     elif [ -n "${INTERVAL_FILE:-}" ] && [ -f "${INTERVAL_FILE:-}" ]; then
         interval_param="-L ${INTERVAL_FILE}"
+    fi
+    if [ -n "${interval_param}" ]; then
+        if [[ ! "${MUTECT2_INTERVAL_PADDING:-100}" =~ ^[0-9]+$ ]]; then
+            log_error "MUTECT2_INTERVAL_PADDING必须为非负整数: ${MUTECT2_INTERVAL_PADDING:-}"
+            return 1
+        fi
+        interval_padding_param="--interval-padding ${MUTECT2_INTERVAL_PADDING:-100}"
     fi
 
     log_info "执行: Mutect2 FilterMutectCalls"
@@ -248,6 +256,7 @@ filter_mutect2() {
         -V "${input_vcf}" \
         -O "${filtered_vcf}" \
         ${interval_param} \
+        ${interval_padding_param} \
         ${contamination_param} \
         ${orientation_param} \
         ${FILTER_MUTECT_EXTRA_PARAMS:-}

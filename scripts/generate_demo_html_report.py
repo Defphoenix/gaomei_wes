@@ -230,10 +230,12 @@ def main() -> int:
         vcf = variants_dir / f"{pair_id}.mutect2.pass.vcf.gz"
         raw_vcf = variants_dir / f"{pair_id}.mutect2.raw.vcf.gz"
         vep_vcf = result_dir / "annotation" / f"{pair_id}.vep.vcf.gz"
+        manual_vcf = result_dir / "annotation" / f"{pair_id}.vep.manual_filtered.vcf.gz"
         pass_count = count_vcf(vcf)
         raw_count = count_vcf(raw_vcf)
         vep_count = count_vcf(vep_vcf)
-        variant_chart.append({"sample": pair_id, "raw": raw_count, "pass": pass_count, "vep": vep_count})
+        manual_count = count_vcf(manual_vcf)
+        variant_chart.append({"sample": pair_id, "raw": raw_count, "pass": pass_count, "vep": vep_count, "manual": manual_count})
 
         rows = query_vcf(vcf)
         truth_by_variant = truth_lookup(truth)
@@ -266,6 +268,7 @@ def main() -> int:
                   <p class="mb-1"><b>原始突变数:</b> {raw_count}</p>
                   <p class="mb-1"><b>PASS突变数:</b> {pass_count}</p>
                   <p class="mb-1"><b>VEP注释记录:</b> {vep_count}</p>
+                  <p class="mb-1"><b>人工阈值过滤通过:</b> {manual_count}</p>
                   <p class="mb-1"><b>肿瘤比对率:</b> {html.escape(tumor_flag['mapped_rate'])}; <b>正常比对率:</b> {html.escape(normal_flag['mapped_rate'])}</p>
                   <p class="mb-0"><b>质控后reads:</b> 肿瘤 {tumor_fastp.get('after_reads', 'NA')}；正常 {normal_fastp.get('after_reads', 'NA')}</p>
                 </div>
@@ -323,13 +326,14 @@ def main() -> int:
     const vc = echarts.init(document.getElementById('variantChart'));
     vc.setOption({{
       tooltip: {{ trigger: 'axis' }},
-      legend: {{ data: ['原始', 'PASS', 'VEP'] }},
+      legend: {{ data: ['原始', 'PASS', 'VEP', '人工过滤'] }},
       xAxis: {{ type: 'category', data: payload.variantChart.map(x => x.sample) }},
       yAxis: {{ type: 'value' }},
       series: [
         {{ name: '原始', type: 'bar', data: payload.variantChart.map(x => x.raw) }},
         {{ name: 'PASS', type: 'bar', data: payload.variantChart.map(x => x.pass) }},
-        {{ name: 'VEP', type: 'bar', data: payload.variantChart.map(x => x.vep) }}
+        {{ name: 'VEP', type: 'bar', data: payload.variantChart.map(x => x.vep) }},
+        {{ name: '人工过滤', type: 'bar', data: payload.variantChart.map(x => x.manual) }}
       ]
     }});
     const dc = echarts.init(document.getElementById('depthChart'));

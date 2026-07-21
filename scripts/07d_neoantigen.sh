@@ -23,7 +23,13 @@ main() {
 
     local input_vcf="${NEOANTIGEN_VEP_VCF:-}"
     if [ -z "${input_vcf}" ]; then
-        input_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
+        if [ "${RUN_MANUAL_FILTER:-true}" = true ] && [ "${SKIP_MANUAL_FILTER:-false}" = false ] && \
+           [ -f "${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filtered.vcf.gz" ]; then
+            input_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filtered.vcf.gz"
+            log_info "新抗原使用人工过滤后的VEP VCF"
+        else
+            input_vcf="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.vcf.gz"
+        fi
     fi
 
     local protein_fasta="${NEOANTIGEN_PROTEIN_FASTA:-${PROJECT_DIR}/reference/protein.fa}"

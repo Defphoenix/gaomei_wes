@@ -8,6 +8,21 @@ CONFIG_FILE="${CONFIG_FILE:-${SCRIPT_DIR}/../config.sh}"
 source "${CONFIG_FILE}"
 source "${SCRIPT_DIR}/utils.sh"
 
+MANUAL_FILTER_TMP_NORMALIZED_VCF=""
+MANUAL_FILTER_TMP_PLAIN_VCF=""
+
+cleanup_manual_filter_tmp() {
+    if [ -n "${MANUAL_FILTER_TMP_NORMALIZED_VCF}" ]; then
+        rm -f -- \
+            "${MANUAL_FILTER_TMP_NORMALIZED_VCF}" \
+            "${MANUAL_FILTER_TMP_NORMALIZED_VCF}.tbi" \
+            "${MANUAL_FILTER_TMP_NORMALIZED_VCF}.csi"
+    fi
+    if [ -n "${MANUAL_FILTER_TMP_PLAIN_VCF}" ]; then
+        rm -f -- "${MANUAL_FILTER_TMP_PLAIN_VCF}"
+    fi
+}
+
 main() {
     log_step "步骤7e: VEP后人工硬过滤"
 
@@ -32,14 +47,14 @@ main() {
     local audit_tsv="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filter_audit.tsv"
     local summary_json="${DIR_ANNOTATION}/${SAMPLE_ID}.vep.manual_filter_summary.json"
 
+    MANUAL_FILTER_TMP_NORMALIZED_VCF="${normalized_vcf}"
+    MANUAL_FILTER_TMP_PLAIN_VCF="${plain_vcf}"
+
     check_file "VEP注释VCF" "${input_vcf}" || return 1
     check_tool "BCFtools" "${TOOL_BCFTOOLS}" || return 1
     check_tool "Python3" "${TOOL_PYTHON:-python3}" || return 1
     mkdir -p "${DIR_ANNOTATION}"
 
-    cleanup_manual_filter_tmp() {
-        rm -f "${normalized_vcf}" "${normalized_vcf}.tbi" "${normalized_vcf}.csi" "${plain_vcf}"
-    }
     trap cleanup_manual_filter_tmp EXIT
 
     run_cmd "VEP VCF拆分为双等位记录" \
